@@ -144,6 +144,13 @@ cargo run -p tsvm-demo
 cargo run -p tsvm-benchmarks -- 100
 ```
 
+## Releases
+
+GitHub releases are built from tags such as `v0.1.0`. Release archives include
+the `tsvm-demo` and `tsvm-benchmarks` executables for Windows, Linux, and macOS.
+
+See [`docs/releasing.md`](docs/releasing.md).
+
 ## See It In Action
 
 Run:
