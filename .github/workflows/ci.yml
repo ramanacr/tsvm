@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Lexer corpus smoke
+        run: cargo run -p tsvm-lexer --bin lexer_corpus_runner -- tests/fixtures/lexer
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check required docs
+        shell: bash
+        run: |
+          test -f README.md
+          test -f docs/architecture.md
+          test -f docs/roadmap.md
+          test -f docs/milestones.md
+          test -f security/threat-model.md
+          test -f security/sandbox.md
+          test -f security/csp.md
+          test -f security/origin-policy.md
+          test "$(find docs/adr -name 'ADR-*.md' | wc -l)" -ge 10
+
+      - name: Check TypeScript-native invariant is documented
+        shell: bash
+        run: |
+          grep -R "TypeScript -> Typed AST -> Semantic Analysis -> Typed IR -> Verified Bytecode -> TSVM" README.md docs security
+

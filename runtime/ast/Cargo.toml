@@ -1,0 +1,19 @@
+[package]
+name = "tsvm-ast"
+version = "0.1.0"
+description = "AST types for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tsvm-lexer = { path = "../lexer" }
+
+[lib]
+name = "tsvm_ast"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+

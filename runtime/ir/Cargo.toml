@@ -1,0 +1,21 @@
+[package]
+name = "tsvm-ir"
+version = "0.1.0"
+description = "Typed IR lowering for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tsvm-ast = { path = "../ast" }
+tsvm-parser = { path = "../parser" }
+tsvm-semantic = { path = "../semantic" }
+
+[lib]
+name = "tsvm_ir"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+

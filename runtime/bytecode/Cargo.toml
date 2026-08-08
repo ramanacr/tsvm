@@ -1,0 +1,21 @@
+[package]
+name = "tsvm-bytecode"
+version = "0.1.0"
+description = "Bytecode encoding and verifier for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tsvm-ast = { path = "../ast" }
+tsvm-ir = { path = "../ir" }
+tsvm-semantic = { path = "../semantic" }
+
+[lib]
+name = "tsvm_bytecode"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+

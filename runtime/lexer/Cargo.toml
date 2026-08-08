@@ -1,0 +1,16 @@
+[package]
+name = "tsvm-lexer"
+version = "0.1.0"
+description = "Lexer for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "tsvm_lexer"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+

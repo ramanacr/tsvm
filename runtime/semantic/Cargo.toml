@@ -1,0 +1,20 @@
+[package]
+name = "tsvm-semantic"
+version = "0.1.0"
+description = "Semantic analyzer for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tsvm-ast = { path = "../ast" }
+tsvm-parser = { path = "../parser" }
+
+[lib]
+name = "tsvm_semantic"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+

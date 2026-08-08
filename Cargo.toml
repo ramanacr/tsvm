@@ -1,0 +1,22 @@
+[workspace]
+members = [
+    "runtime/ast",
+    "runtime/lexer",
+    "runtime/parser",
+    "runtime/semantic",
+    "runtime/ir",
+    "runtime/bytecode",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/raman/tsvm"
+rust-version = "1.82"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "deny"
