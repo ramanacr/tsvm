@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M9 standalone runtime foundation from
+This repository currently implements the M0-M10 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -59,20 +59,26 @@ This repository currently implements the M0-M9 standalone runtime foundation fro
 - JS/TS interop boundary model for standalone host integration: explicit
   `InteropValue` conversion, registered host functions callable from TSVM, host
   calls into prepared TS functions, and boundary error propagation.
+- Minimal browser script-loader model that recognizes
+  `<script type="text/typescript">`, resolves local `.ts` script resources,
+  executes external and inline TypeScript through TSVM, ignores normal
+  JavaScript scripts, and records that no JavaScript is generated for the TS
+  path.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
 - Deterministic corpus smoke runner for fuzz-like CI coverage.
 - Architecture, security, roadmap, milestone, and ADR documentation.
 
-Chromium integration, DOM bindings, and fetch bindings are intentionally not
-implemented yet. The implementation document starts with the standalone pipeline
-so it can be proven before browser embedding begins.
+Full Chromium integration, DOM bindings, and fetch bindings are intentionally
+not implemented yet. The implementation document starts with the standalone
+pipeline so it can be proven before browser embedding begins.
 
 ## Repository Layout
 
 ```text
 browser/                  Chromium shell, script loader, DevTools integration
+  script-loader/          Implemented M10 standalone TypeScript script loader
 runtime/                  TypeScript-native compiler and VM components
   lexer/                  Implemented M1 lexer crate
   ast/                    Implemented shared AST crate
@@ -96,6 +102,7 @@ tests/fixtures/bytecode/  Valid bytecode corpus
 tests/fixtures/interpreter/ Valid interpreter corpus
 tests/fixtures/modules/   Valid and invalid local module corpus
 tests/fixtures/interop/   Valid interop boundary corpus
+tests/fixtures/browser/   Valid script-loader browser fixture corpus
 tools/                    Developer tools and corpus runners
 docs/adr/                 Architecture decision records
 ```
@@ -308,6 +315,26 @@ declaration parsing exists, TS-callable host functions use TypeScript function
 stubs for semantic checking; the host registry overrides matching names at
 runtime.
 
+## Browser Script Loader API
+
+```rust
+use std::collections::BTreeMap;
+use tsvm_script_loader::execute_typescript_scripts;
+
+let html = r#"<script type="text/typescript" src="/app.ts"></script>"#;
+let resources = BTreeMap::from([
+    ("/app.ts".into(), "console.log(42);".into()),
+]);
+
+let output = execute_typescript_scripts("/index.html", html, &resources)?;
+assert!(!output.generated_javascript);
+```
+
+M10 recognizes `text/typescript` scripts and executes only those entries through
+the TSVM pipeline. External `.ts` scripts can use the M8 module graph resolver;
+inline TypeScript is compiled directly. Normal JavaScript script tags are left
+alone for a future browser/V8 integration path.
+
 ## V0.1 Lexer Scope
 
 Supported token families:
@@ -323,7 +350,7 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M10 with the minimal browser embed model.
+Deferred language work now starts in M11 with DOM and fetch bindings.
 
 ## Security Posture
 
@@ -342,9 +369,8 @@ See:
 
 ## Roadmap
 
-The next milestone is M10: minimal browser embedding architecture and script
-loader model. The longer sequence continues with DOM/fetch, hardening, and
-performance research.
+The next milestone is M11: DOM and fetch bindings. The longer sequence
+continues with security hardening and performance research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

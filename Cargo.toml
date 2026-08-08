@@ -10,6 +10,7 @@ members = [
     "runtime/heap",
     "runtime/modules",
     "runtime/interop",
+    "browser/script-loader",
 ]
 resolver = "2"
 

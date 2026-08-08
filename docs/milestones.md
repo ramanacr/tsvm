@@ -162,7 +162,29 @@ Deferred from M9:
   exception conversion are deferred until browser embedding introduces the
   actual JavaScript engine boundary.
 
-## M10-M13
+## M10: Minimal Browser Embed
+
+Status: implemented as a standalone script-loader model.
+
+Acceptance evidence:
+
+- `browser/script-loader` recognizes `<script type="text/typescript">`.
+- External `.ts` scripts are resolved from page resources and executed through
+  the module graph, semantic analyzer, typed IR, verified bytecode,
+  interpreter, and heap.
+- Inline TypeScript scripts execute through the same TSVM path.
+- Normal JavaScript scripts are ignored by the TypeScript loader and left for
+  the future browser/V8 path.
+- Tests assert `generated_javascript` remains false for the TypeScript path.
+- Browser script-loader fixtures live in `tests/fixtures/browser`.
+
+Deferred from M10:
+
+- A real Chromium shell, Blink integration, MIME handling, network service
+  integration, DevTools hooks, and renderer-process embedding are deferred until
+  the C++ integration phase.
+
+## M11-M13
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.

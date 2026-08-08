@@ -20,12 +20,12 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Define the minimal browser script loader boundary for
-  `<script type="text/typescript">`.
-- Specify the Rust/C++ ABI surface needed to pass source text, diagnostics,
-  console calls, and host handles across Chromium-side code.
-- Preserve verifier-first execution inside the renderer process.
-- Expand fixtures into browser binding tests for console, DOM, and fetch.
+- Add DOM binding traits for querying and mutating a host document model.
+- Add fetch binding traits that preserve same-origin checks before network-like
+  responses enter TSVM.
+- Preserve verifier-first execution before DOM/fetch host capabilities are
+  exposed.
+- Expand fixtures into browser binding tests for DOM mutation and fetch.
 - Add coverage-guided fuzzing once the Rust toolchain and CI environment can
   support `cargo-fuzz`.
 

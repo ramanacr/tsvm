@@ -20,9 +20,23 @@ engine; TypeScript follows a separate pipeline.
 The current repository implements the lexer, shared AST, parser, semantic
 analysis, typed IR, bytecode encoding/decoding, bytecode verifier,
 verified-bytecode interpreter, managed heap, local module graph, and standalone
-interop-boundary milestones. Empty directories exist for later stages so code
-can land in the intended ownership boundaries without reshaping the project
-each time.
+interop-boundary milestones, plus a standalone browser script-loader model.
+Empty directories exist for later stages so code can land in the intended
+ownership boundaries without reshaping the project each time.
+
+## Script Loading
+
+`browser/script-loader` models the future Chromium hook for
+`<script type="text/typescript">`. It scans a page for TypeScript script tags,
+resolves external `.ts` resources against the document URL, executes external
+scripts through the module graph and inline scripts directly through the
+verified TSVM pipeline, and leaves ordinary JavaScript script tags untouched.
+The loader records `generated_javascript = false` as an executable invariant for
+tests.
+
+This crate is intentionally not a complete HTML parser or browser shell. Its job
+is to prove the runtime contract that the Chromium-side loader must preserve
+once the C++ embed arrives.
 
 ## Interop Boundary
 
