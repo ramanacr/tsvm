@@ -13,6 +13,7 @@ members = [
     "browser/script-loader",
     "web-bindings/dom-fetch",
     "security/hardening",
+    "tools/benchmarks",
 ]
 resolver = "2"
 

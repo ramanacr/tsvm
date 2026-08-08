@@ -10,6 +10,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsvm-benchmarks"
+version = "0.1.0"
+dependencies = [
+ "tsvm-interpreter",
+]
+
+[[package]]
 name = "tsvm-bytecode"
 version = "0.1.0"
 dependencies = [

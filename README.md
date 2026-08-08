@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M12 standalone runtime foundation from
+This repository currently implements the M0-M13 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -69,6 +69,9 @@ This repository currently implements the M0-M12 standalone runtime foundation fr
 - Security hardening tests for verifier-gated execution, script policy
   blocking, remote module rejection, cross-origin fetch rejection, malformed
   bytecode crash corpus handling, and no-JavaScript TypeScript execution.
+- Interpreter benchmark runner for core runtime paths plus documented JIT
+  research constraints around W^X, code signing, verifier gating, sandboxing,
+  and deterministic interpreter fallback.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
@@ -113,6 +116,7 @@ tests/fixtures/browser/   Valid script-loader browser fixture corpus
 tests/fixtures/web-bindings/ Valid DOM/fetch binding corpus
 tests/fixtures/security/ Crash and policy regression corpus
 tools/                    Developer tools and corpus runners
+  benchmarks/             Implemented M13 interpreter benchmark runner
 docs/adr/                 Architecture decision records
 ```
 
@@ -135,6 +139,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p tsvm-lexer --bin lexer_corpus_runner -- tests/fixtures/lexer
+cargo run -p tsvm-benchmarks -- 100
 ```
 
 ## Lexer API
@@ -388,7 +393,9 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M13 with performance and JIT research.
+The implementation document's first full standalone pass is now represented in
+the repository. Remaining work is deeper browser integration, broader language
+coverage, production hardening, and performance engineering.
 
 ## Security Posture
 
@@ -407,7 +414,10 @@ See:
 
 ## Roadmap
 
-The next milestone is M13: performance and JIT research.
+All milestones from the implementation document have a repository-backed
+implementation or executable standalone model. See `docs/roadmap.md` for the
+next deeper integration passes and `docs/benchmark-results.md` for the first
+checked-in benchmark baseline.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

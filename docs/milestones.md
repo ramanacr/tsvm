@@ -226,7 +226,26 @@ Deferred from M12:
   integration with Chromium, and crash corpus minimization are deferred until
   the browser integration environment exists.
 
-## M13
+## M13: Performance And JIT Research
+
+Status: implemented for interpreter benchmarking and JIT constraints.
+
+Acceptance evidence:
+
+- `tools/benchmarks` provides a dependency-free interpreter benchmark runner.
+- Default scenarios cover the initial demo, function calls, and object mutation.
+- Benchmark output includes scenario name, iteration count, elapsed time, and
+  stable console-value counts.
+- `docs/performance.md` documents JIT research constraints, including W^X,
+  platform code signing, renderer sandboxing, verifier gating, interpreter
+  fallback, and the no-TypeScript-to-JavaScript invariant.
+- ADR-0010 records continued JIT deferral.
+
+Deferred from M13:
+
+- Real profiling integration, benchmark trend storage, optimizer passes, and JIT
+  prototypes are deferred until the browser/runtime boundary is mature enough to
+  evaluate them safely.
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.

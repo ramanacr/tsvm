@@ -20,12 +20,15 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Add interpreter benchmark fixtures for the initial demo, function calls,
-  object mutation, module loading, interop calls, and DOM/fetch host calls.
-- Add a benchmark runner that reports stable operation counts and elapsed time.
-- Draft JIT research guidance without changing the interpreter-first runtime.
-- Keep W^X, code-signing, and renderer sandbox constraints explicit before any
-  executable-code generation is considered.
+- Deepen Chromium renderer integration from the standalone script-loader model.
+- Replace host-function TypeScript stubs with ambient declarations for DOM,
+  fetch, and interop APIs.
+- Expand language support toward exceptions, classes, loops, async, and richer
+  structural typing.
+- Add CI jobs for benchmark trend capture, fuzz smoke, sanitizer builds, and
+  dependency audits.
+- Keep the interpreter baseline authoritative before any JIT research branch is
+  allowed to execute generated code.
 
 ## Long-Term Browser Goal
 
