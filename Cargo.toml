@@ -9,6 +9,7 @@ members = [
     "runtime/interpreter",
     "runtime/heap",
     "runtime/modules",
+    "runtime/interop",
 ]
 resolver = "2"
 

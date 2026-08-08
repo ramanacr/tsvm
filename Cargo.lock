@@ -23,11 +23,16 @@ name = "tsvm-heap"
 version = "0.1.0"
 
 [[package]]
+name = "tsvm-interop"
+version = "0.1.0"
+
+[[package]]
 name = "tsvm-interpreter"
 version = "0.1.0"
 dependencies = [
  "tsvm-bytecode",
  "tsvm-heap",
+ "tsvm-interop",
  "tsvm-modules",
  "tsvm-semantic",
 ]

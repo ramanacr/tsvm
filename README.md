@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M8 standalone runtime foundation from
+This repository currently implements the M0-M9 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -56,15 +56,18 @@ This repository currently implements the M0-M8 standalone runtime foundation fro
   exports, including dependency-first ordering, cycle detection, missing-module
   diagnostics, unsupported-specifier diagnostics, and bundled execution through
   the verified TSVM pipeline.
+- JS/TS interop boundary model for standalone host integration: explicit
+  `InteropValue` conversion, registered host functions callable from TSVM, host
+  calls into prepared TS functions, and boundary error propagation.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
 - Deterministic corpus smoke runner for fuzz-like CI coverage.
 - Architecture, security, roadmap, milestone, and ADR documentation.
 
-Chromium integration, JS interop, DOM bindings, and fetch bindings are
-intentionally not implemented yet. The implementation document starts with the
-standalone pipeline so it can be proven before browser embedding begins.
+Chromium integration, DOM bindings, and fetch bindings are intentionally not
+implemented yet. The implementation document starts with the standalone pipeline
+so it can be proven before browser embedding begins.
 
 ## Repository Layout
 
@@ -81,6 +84,7 @@ runtime/                  TypeScript-native compiler and VM components
   interpreter/            Implemented M6 verified-bytecode interpreter
   heap/                   Implemented M7 managed heap and tracing collector
   modules/                Implemented M8 local module graph resolver
+  interop/                Implemented M9 standalone host interop values
 web-bindings/             Future console, DOM, fetch, timers, events bindings
 interop/                  Future JS/TS value and call boundary
 security/                 Threat model, sandbox, CSP, and origin policy notes
@@ -91,6 +95,7 @@ tests/fixtures/ir/        Valid IR lowering corpus
 tests/fixtures/bytecode/  Valid bytecode corpus
 tests/fixtures/interpreter/ Valid interpreter corpus
 tests/fixtures/modules/   Valid and invalid local module corpus
+tests/fixtures/interop/   Valid interop boundary corpus
 tools/                    Developer tools and corpus runners
 docs/adr/                 Architecture decision records
 ```
@@ -263,6 +268,46 @@ and then compiled through semantic analysis, typed IR, verified bytecode, and
 the interpreter. Non-local specifiers and cycles are rejected before
 compilation.
 
+## Interop API
+
+```rust
+use tsvm_interop::{HostEnvironment, InteropError, InteropValue};
+use tsvm_interpreter::{execute_source_with_host, PreparedModule};
+
+fn host_add(args: &[InteropValue]) -> Result<InteropValue, InteropError> {
+    match args {
+        [InteropValue::Number(left), InteropValue::Number(right)] => {
+            Ok(InteropValue::Number(left + right))
+        }
+        _ => Err(InteropError::new("expected two numbers")),
+    }
+}
+
+let host = HostEnvironment::new().with_function("hostAdd", host_add);
+let output = execute_source_with_host(r#"
+function hostAdd(a: number, b: number): number {
+  return 0;
+}
+console.log(hostAdd(20, 22));
+"#, &host)?;
+
+let module = PreparedModule::from_source(
+    "function add(a: number, b: number): number { return a + b; }",
+)?;
+let value = module.call_function(
+    "add",
+    &[InteropValue::Number(20.0), InteropValue::Number(22.0)],
+    &HostEnvironment::new(),
+)?;
+```
+
+M9 is a standalone interop boundary, not a browser JS engine embed. Host
+functions are registered explicitly, arguments and return values cross through
+`InteropValue`, and host failures become `ExecuteError::Interop`. Until ambient
+declaration parsing exists, TS-callable host functions use TypeScript function
+stubs for semantic checking; the host registry overrides matching names at
+runtime.
+
 ## V0.1 Lexer Scope
 
 Supported token families:
@@ -278,7 +323,7 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M9 with JS/TS interop boundary modeling.
+Deferred language work now starts in M10 with the minimal browser embed model.
 
 ## Security Posture
 
@@ -297,8 +342,8 @@ See:
 
 ## Roadmap
 
-The next milestone is M9: JS/TS interop value and call boundary modeling. The
-longer sequence continues with browser embedding, DOM/fetch, hardening, and
+The next milestone is M10: minimal browser embedding architecture and script
+loader model. The longer sequence continues with DOM/fetch, hardening, and
 performance research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and

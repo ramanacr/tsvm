@@ -19,9 +19,25 @@ engine; TypeScript follows a separate pipeline.
 
 The current repository implements the lexer, shared AST, parser, semantic
 analysis, typed IR, bytecode encoding/decoding, bytecode verifier,
-verified-bytecode interpreter, managed heap, and local module graph milestones.
-Empty directories exist for later stages so code can land in the intended
-ownership boundaries without reshaping the project each time.
+verified-bytecode interpreter, managed heap, local module graph, and standalone
+interop-boundary milestones. Empty directories exist for later stages so code
+can land in the intended ownership boundaries without reshaping the project
+each time.
+
+## Interop Boundary
+
+The standalone M9 interop layer models host integration without embedding a
+JavaScript engine. `runtime/interop` defines explicit `InteropValue` variants
+for primitives, objects, arrays, null, and undefined. Host functions are
+registered by name in `HostEnvironment`; TSVM calls are converted from runtime
+values into interop values, dispatched through the host registry, converted back
+into heap-backed runtime values, and surfaced as `ExecuteError::Interop` on
+host failure.
+
+The reverse direction is handled by `PreparedModule`, which compiles and
+verifies TS bytecode once, then lets host code call named TS functions with
+`InteropValue` arguments. This gives browser embedding work a concrete value
+and call model while keeping the standalone runtime free of V8 dependencies.
 
 ## Module Loading
 

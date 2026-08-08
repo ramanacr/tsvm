@@ -7,6 +7,7 @@ use tsvm_bytecode::{
     Instruction, Opcode, VerifyError,
 };
 use tsvm_heap::{CollectionReport, GcHeap, HeapHandle, Trace, Tracer};
+use tsvm_interop::{HostEnvironment, InteropError, InteropValue};
 use tsvm_modules::{bundle_module_graph, ModuleDiagnostic};
 use tsvm_semantic::SemanticDiagnostic;
 
@@ -40,15 +41,23 @@ pub enum ExecuteError {
     Module(Vec<ModuleDiagnostic>),
     Compile(Vec<SemanticDiagnostic>),
     Verify(Vec<VerifyError>),
+    Interop(InteropError),
     Runtime(String),
 }
 
 pub fn execute_source(source: &str) -> Result<ExecutionOutput, ExecuteError> {
+    execute_source_with_host(source, &HostEnvironment::new())
+}
+
+pub fn execute_source_with_host(
+    source: &str,
+    host: &HostEnvironment,
+) -> Result<ExecutionOutput, ExecuteError> {
     let compiled = compile_source(source);
     let Some(module) = compiled.module else {
         return Err(ExecuteError::Compile(compiled.diagnostics));
     };
-    execute_module(&module)
+    execute_module_with_host(&module, host)
 }
 
 pub fn execute_module_graph(
@@ -60,20 +69,66 @@ pub fn execute_module_graph(
 }
 
 pub fn execute_module(module: &BytecodeModule) -> Result<ExecutionOutput, ExecuteError> {
-    verify_module(module).map_err(ExecuteError::Verify)?;
-    Interpreter::new(module).execute()
+    execute_module_with_host(module, &HostEnvironment::new())
 }
 
-struct Interpreter<'module> {
+pub fn execute_module_with_host(
+    module: &BytecodeModule,
+    host: &HostEnvironment,
+) -> Result<ExecutionOutput, ExecuteError> {
+    verify_module(module).map_err(ExecuteError::Verify)?;
+    Interpreter::new(module, host).execute()
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreparedModule {
+    module: BytecodeModule,
+}
+
+impl PreparedModule {
+    pub fn from_source(source: &str) -> Result<Self, ExecuteError> {
+        let compiled = compile_source(source);
+        let Some(module) = compiled.module else {
+            return Err(ExecuteError::Compile(compiled.diagnostics));
+        };
+        verify_module(&module).map_err(ExecuteError::Verify)?;
+        Ok(Self { module })
+    }
+
+    pub fn call_function(
+        &self,
+        name: &str,
+        args: &[InteropValue],
+        host: &HostEnvironment,
+    ) -> Result<InteropValue, ExecuteError> {
+        let mut interpreter = Interpreter::new(&self.module, host);
+        let runtime_args = args
+            .iter()
+            .map(|value| runtime_from_interop(value, &mut interpreter.heap))
+            .collect::<RuntimeValues>()?;
+        let result = interpreter.call_function(name, runtime_args)?;
+        let mut roots = Vec::new();
+        extend_roots(&result, &mut roots);
+        interpreter.heap.collect(roots);
+        let value = materialize(&result, &interpreter.heap)?;
+        Ok(interop_from_value(value))
+    }
+}
+
+type RuntimeValues = Result<Vec<RuntimeValue>, ExecuteError>;
+
+struct Interpreter<'module, 'host> {
     module: &'module BytecodeModule,
+    host: &'host HostEnvironment,
     heap: GcHeap<HeapValue>,
     console: Vec<RuntimeValue>,
 }
 
-impl<'module> Interpreter<'module> {
-    fn new(module: &'module BytecodeModule) -> Self {
+impl<'module, 'host> Interpreter<'module, 'host> {
+    fn new(module: &'module BytecodeModule, host: &'host HostEnvironment) -> Self {
         Self {
             module,
+            host,
             heap: GcHeap::new(),
             console: Vec::new(),
         }
@@ -113,6 +168,9 @@ impl<'module> Interpreter<'module> {
             self.console.extend(args);
             return Ok(RuntimeValue::Undefined);
         }
+        if let Some(result) = self.call_host(name, &args)? {
+            return Ok(result);
+        }
 
         let function = self
             .module
@@ -122,6 +180,30 @@ impl<'module> Interpreter<'module> {
             .ok_or_else(|| ExecuteError::Runtime(format!("unknown function `{name}`")))?;
         let mut frame = Frame::new(function, args);
         self.execute_frame(function, &mut frame)
+    }
+
+    fn call_host(
+        &mut self,
+        name: &str,
+        args: &[RuntimeValue],
+    ) -> Result<Option<RuntimeValue>, ExecuteError> {
+        let args = args
+            .iter()
+            .map(|value| materialize(value, &self.heap).map(interop_from_value))
+            .collect::<Result<Vec<_>, _>>()?;
+        let Some(result) = self.host.call(name, &args) else {
+            return Ok(None);
+        };
+        result
+            .and_then(|value| {
+                runtime_from_interop(&value, &mut self.heap).map_err(|err| match err {
+                    ExecuteError::Interop(err) => err,
+                    ExecuteError::Runtime(message) => InteropError::new(message),
+                    _ => InteropError::new("unexpected interop conversion error"),
+                })
+            })
+            .map(Some)
+            .map_err(ExecuteError::Interop)
     }
 
     fn execute_frame(
@@ -532,4 +614,50 @@ fn materialize(value: &RuntimeValue, heap: &GcHeap<HeapValue>) -> Result<Value, 
             _ => return Err(ExecuteError::Runtime("stale array handle".into())),
         },
     })
+}
+
+fn runtime_from_interop(
+    value: &InteropValue,
+    heap: &mut GcHeap<HeapValue>,
+) -> Result<RuntimeValue, ExecuteError> {
+    Ok(match value {
+        InteropValue::Number(value) => RuntimeValue::Number(*value),
+        InteropValue::String(value) => RuntimeValue::String(value.clone()),
+        InteropValue::Boolean(value) => RuntimeValue::Boolean(*value),
+        InteropValue::Null => RuntimeValue::Null,
+        InteropValue::Undefined => RuntimeValue::Undefined,
+        InteropValue::Object(fields) => {
+            let mut runtime_fields = BTreeMap::new();
+            for (name, value) in fields {
+                runtime_fields.insert(name.clone(), runtime_from_interop(value, heap)?);
+            }
+            RuntimeValue::Object(heap.allocate(HeapValue::Object(runtime_fields)))
+        }
+        InteropValue::Array(values) => {
+            let runtime_values = values
+                .iter()
+                .map(|value| runtime_from_interop(value, heap))
+                .collect::<RuntimeValues>()?;
+            RuntimeValue::Array(heap.allocate(HeapValue::Array(runtime_values)))
+        }
+    })
+}
+
+fn interop_from_value(value: Value) -> InteropValue {
+    match value {
+        Value::Number(value) => InteropValue::Number(value),
+        Value::String(value) => InteropValue::String(value),
+        Value::Boolean(value) => InteropValue::Boolean(value),
+        Value::Null => InteropValue::Null,
+        Value::Undefined => InteropValue::Undefined,
+        Value::Object(fields) => InteropValue::Object(
+            fields
+                .into_iter()
+                .map(|(name, value)| (name, interop_from_value(value)))
+                .collect(),
+        ),
+        Value::Array(values) => {
+            InteropValue::Array(values.into_iter().map(interop_from_value).collect())
+        }
+    }
 }

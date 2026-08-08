@@ -1,5 +1,15 @@
 use tsvm_bytecode::{compile_source, decode_module, encode_module, Opcode};
+use tsvm_interop::{HostEnvironment, InteropError, InteropValue};
 use tsvm_interpreter::{execute_module, execute_module_graph, execute_source, ExecuteError, Value};
+
+fn host_add(args: &[InteropValue]) -> Result<InteropValue, InteropError> {
+    match args {
+        [InteropValue::Number(left), InteropValue::Number(right)] => {
+            Ok(InteropValue::Number(left + right))
+        }
+        _ => Err(InteropError::new("expected two numbers")),
+    }
+}
 
 fn initial_demo_source() -> &'static str {
     r#"
@@ -117,6 +127,68 @@ fn reports_module_diagnostics_before_compilation() {
     let err = execute_module_graph("/app.ts", &sources).expect_err("module diagnostics expected");
 
     assert!(matches!(err, ExecuteError::Module(_)));
+}
+
+#[test]
+fn typescript_calls_registered_host_function() {
+    let host = HostEnvironment::new().with_function("hostAdd", host_add);
+    let output = tsvm_interpreter::execute_source_with_host(
+        r#"
+function hostAdd(a: number, b: number): number {
+  return 0;
+}
+
+console.log(hostAdd(20, 22));
+"#,
+        &host,
+    )
+    .expect("host function should execute");
+
+    assert_eq!(output.console, vec![Value::Number(42.0)]);
+}
+
+#[test]
+fn host_calls_typescript_function_with_boundary_values() {
+    let module = tsvm_interpreter::PreparedModule::from_source(
+        r#"
+function add(a: number, b: number): number {
+  return a + b;
+}
+"#,
+    )
+    .expect("module should prepare");
+
+    let value = module
+        .call_function(
+            "add",
+            &[InteropValue::Number(20.0), InteropValue::Number(22.0)],
+            &HostEnvironment::new(),
+        )
+        .expect("TS function should be callable");
+
+    assert_eq!(value, InteropValue::Number(42.0));
+}
+
+#[test]
+fn host_errors_are_reported_at_the_interop_boundary() {
+    fn fail(_args: &[InteropValue]) -> Result<InteropValue, InteropError> {
+        Err(InteropError::new("host failure"))
+    }
+
+    let host = HostEnvironment::new().with_function("hostFail", fail);
+    let err = tsvm_interpreter::execute_source_with_host(
+        r#"
+function hostFail(): number {
+  return 0;
+}
+
+console.log(hostFail());
+"#,
+        &host,
+    )
+    .expect_err("host failure should cross boundary as interop error");
+
+    assert!(matches!(err, ExecuteError::Interop(_)));
 }
 
 #[test]

@@ -20,12 +20,12 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Define the JS/TS value model for primitives, objects, arrays, callable
-  handles, exceptions, and promise-like async boundaries.
-- Add safe host-handle ownership rules that build on the M7 heap handles.
-- Preserve verifier-first execution when host functions are exposed to TSVM.
-- Expand fixtures into a shared corpus used by interop and browser binding
-  tests.
+- Define the minimal browser script loader boundary for
+  `<script type="text/typescript">`.
+- Specify the Rust/C++ ABI surface needed to pass source text, diagnostics,
+  console calls, and host handles across Chromium-side code.
+- Preserve verifier-first execution inside the renderer process.
+- Expand fixtures into browser binding tests for console, DOM, and fetch.
 - Add coverage-guided fuzzing once the Rust toolchain and CI environment can
   support `cargo-fuzz`.
 

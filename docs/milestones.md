@@ -139,7 +139,30 @@ Acceptance evidence:
   semantic analyzer, typed IR, bytecode verifier, interpreter, and heap path.
 - Valid and invalid module fixtures live in `tests/fixtures/modules`.
 
-## M9-M13
+## M9: JS Interop
+
+Status: implemented for the standalone host boundary.
+
+Acceptance evidence:
+
+- `runtime/interop` defines explicit boundary values for primitives, objects,
+  arrays, `null`, and `undefined`.
+- Host functions can be registered in `HostEnvironment`.
+- TSVM code can call registered host functions by name after semantic checking
+  with a TypeScript stub.
+- Host code can prepare a verified TS module and call named TS functions with
+  `InteropValue` arguments.
+- Host failures are reported as `ExecuteError::Interop` before they can be
+  mistaken for verifier or semantic errors.
+- Valid interop fixtures live in `tests/fixtures/interop`.
+
+Deferred from M9:
+
+- Real V8 integration, promises, proxies, symbols, getters/setters, and
+  exception conversion are deferred until browser embedding introduces the
+  actual JavaScript engine boundary.
+
+## M10-M13
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.
