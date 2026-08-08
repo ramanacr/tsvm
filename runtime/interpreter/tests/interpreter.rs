@@ -28,6 +28,8 @@ fn executes_initial_demo_through_verified_bytecode() {
 
     assert_eq!(output.console, vec![Value::Number(150.0)]);
     assert_eq!(output.return_value, Value::Undefined);
+    assert_eq!(output.heap.live_objects, 0);
+    assert_eq!(output.heap.last_collection.collected, 1);
 }
 
 #[test]
@@ -40,6 +42,30 @@ fn executes_decoded_bytecode_module() {
     let output = execute_module(&decoded).expect("decoded module should execute");
 
     assert_eq!(output.console, vec![Value::Number(150.0)]);
+}
+
+#[test]
+fn retains_console_objects_as_cross_boundary_roots() {
+    let output = execute_source(
+        r#"
+const account = {
+  id: 7,
+  balance: 25
+};
+
+console.log(account);
+"#,
+    )
+    .expect("object fixture should execute");
+
+    let mut expected = std::collections::BTreeMap::new();
+    expected.insert("balance".into(), Value::Number(25.0));
+    expected.insert("id".into(), Value::Number(7.0));
+
+    assert_eq!(output.console, vec![Value::Object(expected)]);
+    assert_eq!(output.heap.live_objects, 1);
+    assert_eq!(output.heap.last_collection.marked, 1);
+    assert_eq!(output.heap.last_collection.collected, 0);
 }
 
 #[test]

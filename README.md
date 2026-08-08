@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M6 standalone runtime foundation from
+This repository currently implements the M0-M7 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -48,16 +48,19 @@ This repository currently implements the M0-M6 standalone runtime foundation fro
 - Verified-bytecode interpreter with runtime values for primitives, objects,
   arrays, local variables, member access/mutation, function calls, arithmetic,
   branches, returns, and a host `console.log` capability.
+- Managed heap with stable generation-checked handles, tracing collection,
+  stale-handle rejection, and stress coverage for unreachable allocation churn.
+- Interpreter object and array allocation through the managed heap, with
+  return values and console output treated as cross-boundary roots.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
 - Deterministic corpus smoke runner for fuzz-like CI coverage.
 - Architecture, security, roadmap, milestone, and ADR documentation.
 
-Chromium integration, heap/GC, modules, JS interop, DOM bindings, and fetch
-bindings are intentionally not implemented yet. The implementation document
-starts with the standalone pipeline so it can be proven before browser
-embedding begins.
+Chromium integration, modules, JS interop, DOM bindings, and fetch bindings are
+intentionally not implemented yet. The implementation document starts with the
+standalone pipeline so it can be proven before browser embedding begins.
 
 ## Repository Layout
 
@@ -72,6 +75,7 @@ runtime/                  TypeScript-native compiler and VM components
   bytecode/               Implemented M5 bytecode encoder/decoder/verifier
   verifier/               Future expanded verifier internals
   interpreter/            Implemented M6 verified-bytecode interpreter
+  heap/                   Implemented M7 managed heap and tracing collector
 web-bindings/             Future console, DOM, fetch, timers, events bindings
 interop/                  Future JS/TS value and call boundary
 security/                 Threat model, sandbox, CSP, and origin policy notes
@@ -90,9 +94,12 @@ docs/adr/                 Architecture decision records
 - Rust 1.82 or newer.
 - Cargo, rustfmt, and Clippy.
 
-The local Codex environment used to create this scaffold did not have Rust
-installed, so CI is the authoritative executable verification target until the
-toolchain is installed locally.
+On Windows, the GNU Rust target can run this workspace without the MSVC linker:
+
+```sh
+rustup target add x86_64-pc-windows-gnu
+cargo +stable-x86_64-pc-windows-gnu test --workspace
+```
 
 ## Common Commands
 
@@ -198,6 +205,35 @@ The interpreter only executes modules that pass bytecode verification. Invalid
 source returns semantic diagnostics before bytecode execution; malformed modules
 return verifier errors before runtime state is created.
 
+## Heap API
+
+```rust
+use tsvm_heap::{GcHeap, Trace, Tracer};
+
+#[derive(Clone)]
+struct Node(Vec<tsvm_heap::HeapHandle>);
+
+impl Trace for Node {
+    fn trace(&self, tracer: &mut Tracer<'_>) {
+        for handle in &self.0 {
+            tracer.mark(*handle);
+        }
+    }
+}
+
+let mut heap = GcHeap::new();
+let child = heap.allocate(Node(Vec::new()));
+let root = heap.allocate(Node(vec![child]));
+let report = heap.collect([root]);
+assert_eq!(report.marked, 2);
+```
+
+The heap uses non-moving slots plus generation-checked handles. Collection is a
+simple tracing pass from explicit roots; unreachable slots are freed and reused
+with a new generation so stale handles do not resolve. The interpreter uses the
+heap for runtime objects and arrays, then roots return values and console output
+before final materialization.
+
 ## V0.1 Lexer Scope
 
 Supported token families:
@@ -213,8 +249,7 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M7 with heap/GC and runtime memory model
-hardening.
+Deferred language work now starts in M8 with deterministic local module loading.
 
 ## Security Posture
 
@@ -233,9 +268,9 @@ See:
 
 ## Roadmap
 
-The next milestone is M7: managed allocation, garbage collection strategy, and
-safe cross-boundary handles. The longer sequence continues with modules,
-interop, browser embedding, DOM/fetch, hardening, and performance research.
+The next milestone is M8: deterministic local module loading with cycle
+detection and clear diagnostics. The longer sequence continues with interop,
+browser embedding, DOM/fetch, hardening, and performance research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

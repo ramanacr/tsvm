@@ -20,14 +20,13 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Replace the current reference-counted object handles with an explicit heap
-  abstraction that can evolve toward tracing GC.
-- Add allocation APIs, roots, handle types, and stress tests for object and
-  array lifetimes.
-- Preserve verifier-first execution while moving runtime objects behind managed
-  handles.
-- Expand fixtures into a shared corpus used by heap/GC, module, and interop
-  tests.
+- Implement deterministic local module loading for `import` and `export`
+  declarations.
+- Add module graph diagnostics for missing files, unsupported specifiers, and
+  cycles.
+- Preserve verifier-first execution across multi-module compilation.
+- Expand fixtures into a shared corpus used by module, interop, and browser
+  binding tests.
 - Add coverage-guided fuzzing once the Rust toolchain and CI environment can
   support `cargo-fuzz`.
 

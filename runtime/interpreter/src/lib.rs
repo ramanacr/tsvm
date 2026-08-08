@@ -1,48 +1,37 @@
 #![forbid(unsafe_code)]
 
-use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
+use std::collections::BTreeMap;
 
 use tsvm_bytecode::{
     compile_source, verify_module, BytecodeBlock, BytecodeFunction, BytecodeModule, Constant,
     Instruction, Opcode, VerifyError,
 };
+use tsvm_heap::{CollectionReport, GcHeap, HeapHandle, Trace, Tracer};
 use tsvm_semantic::SemanticDiagnostic;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExecutionOutput {
     pub console: Vec<Value>,
     pub return_value: Value,
+    pub heap: HeapStats,
 }
 
-impl PartialEq for ExecutionOutput {
-    fn eq(&self, other: &Self) -> bool {
-        self.console == other.console && self.return_value == other.return_value
-    }
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct HeapStats {
+    pub live_objects: usize,
+    pub allocated_slots: usize,
+    pub last_collection: CollectionReport,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Number(f64),
     String(String),
     Boolean(bool),
     Null,
     Undefined,
-    Object(Rc<RefCell<BTreeMap<String, Value>>>),
+    Object(BTreeMap<String, Value>),
     Array(Vec<Value>),
-}
-
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Number(left), Value::Number(right)) => left == right,
-            (Value::String(left), Value::String(right)) => left == right,
-            (Value::Boolean(left), Value::Boolean(right)) => left == right,
-            (Value::Null, Value::Null) | (Value::Undefined, Value::Undefined) => true,
-            (Value::Array(left), Value::Array(right)) => left == right,
-            (Value::Object(left), Value::Object(right)) => left.borrow().eq(&right.borrow()),
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -67,29 +56,52 @@ pub fn execute_module(module: &BytecodeModule) -> Result<ExecutionOutput, Execut
 
 struct Interpreter<'module> {
     module: &'module BytecodeModule,
-    console: Vec<Value>,
+    heap: GcHeap<HeapValue>,
+    console: Vec<RuntimeValue>,
 }
 
 impl<'module> Interpreter<'module> {
     fn new(module: &'module BytecodeModule) -> Self {
         Self {
             module,
+            heap: GcHeap::new(),
             console: Vec::new(),
         }
     }
 
     fn execute(mut self) -> Result<ExecutionOutput, ExecuteError> {
         let return_value = self.call_function("__entry", Vec::new())?;
+        let mut roots = runtime_roots(&self.console);
+        extend_roots(&return_value, &mut roots);
+        let last_collection = self.heap.collect(roots);
+
+        let console = self
+            .console
+            .iter()
+            .map(|value| materialize(value, &self.heap))
+            .collect::<Result<Vec<_>, _>>()?;
+        let return_value = materialize(&return_value, &self.heap)?;
+        let heap = HeapStats {
+            live_objects: self.heap.live_len(),
+            allocated_slots: self.heap.capacity(),
+            last_collection,
+        };
+
         Ok(ExecutionOutput {
-            console: self.console,
+            console,
             return_value,
+            heap,
         })
     }
 
-    fn call_function(&mut self, name: &str, args: Vec<Value>) -> Result<Value, ExecuteError> {
+    fn call_function(
+        &mut self,
+        name: &str,
+        args: Vec<RuntimeValue>,
+    ) -> Result<RuntimeValue, ExecuteError> {
         if name == "console.log" {
             self.console.extend(args);
-            return Ok(Value::Undefined);
+            return Ok(RuntimeValue::Undefined);
         }
 
         let function = self
@@ -106,7 +118,7 @@ impl<'module> Interpreter<'module> {
         &mut self,
         function: &BytecodeFunction,
         frame: &mut Frame,
-    ) -> Result<Value, ExecuteError> {
+    ) -> Result<RuntimeValue, ExecuteError> {
         let mut block_id = 0_u32;
 
         loop {
@@ -125,7 +137,7 @@ impl<'module> Interpreter<'module> {
             }
 
             if !jumped {
-                return Ok(Value::Undefined);
+                return Ok(RuntimeValue::Undefined);
             }
         }
     }
@@ -149,7 +161,8 @@ impl<'module> Interpreter<'module> {
                     let name = symbol_name(name_constant)?;
                     object.insert(name.to_owned(), frame.value(value_id)?.clone());
                 }
-                frame.push_value(Value::Object(Rc::new(RefCell::new(object))));
+                let handle = self.heap.allocate(HeapValue::Object(object));
+                frame.push_value(RuntimeValue::Object(handle));
             }
             Opcode::BuildArray => {
                 let count = instruction.operands[0] as usize;
@@ -157,7 +170,8 @@ impl<'module> Interpreter<'module> {
                 for operand in instruction.operands.iter().skip(1) {
                     values.push(frame.value(*operand)?.clone());
                 }
-                frame.push_value(Value::Array(values));
+                let handle = self.heap.allocate(HeapValue::Array(values));
+                frame.push_value(RuntimeValue::Array(handle));
             }
             Opcode::LoadLocal => {
                 frame.push_value(frame.local(instruction.operands[0])?.clone());
@@ -169,18 +183,18 @@ impl<'module> Interpreter<'module> {
             Opcode::LoadMember => {
                 let object = frame.value(instruction.operands[0])?;
                 let property = symbol_name(self.constant(instruction.operands[1])?)?;
-                frame.push_value(load_member(object, property)?);
+                frame.push_value(load_member(&self.heap, object, property)?);
             }
             Opcode::StoreMember => {
                 let object = frame.value(instruction.operands[0])?.clone();
-                let property = symbol_name(self.constant(instruction.operands[1])?)?;
+                let property = symbol_name(self.constant(instruction.operands[1])?)?.to_owned();
                 let value = frame.value(instruction.operands[2])?.clone();
-                store_member(&object, property, value)?;
+                store_member(&mut self.heap, &object, &property, value)?;
             }
             Opcode::Binary => {
                 let left = frame.value(instruction.operands[1])?.clone();
                 let right = frame.value(instruction.operands[2])?.clone();
-                frame.push_value(binary(instruction.operands[0], &left, &right)?);
+                frame.push_value(binary(instruction.operands[0], &self.heap, &left, &right)?);
             }
             Opcode::Call => {
                 let callee = symbol_name(self.constant(instruction.operands[0])?)?.to_owned();
@@ -206,7 +220,9 @@ impl<'module> Interpreter<'module> {
                 let value = instruction
                     .operands
                     .first()
-                    .map_or(Ok(Value::Undefined), |value| frame.value(*value).cloned())?;
+                    .map_or(Ok(RuntimeValue::Undefined), |value| {
+                        frame.value(*value).cloned()
+                    })?;
                 return Ok(ControlFlow::Return(value));
             }
         }
@@ -222,42 +238,89 @@ impl<'module> Interpreter<'module> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum RuntimeValue {
+    Number(f64),
+    String(String),
+    Boolean(bool),
+    Null,
+    Undefined,
+    Object(HeapHandle),
+    Array(HeapHandle),
+}
+
+impl Trace for RuntimeValue {
+    fn trace(&self, tracer: &mut Tracer<'_>) {
+        match self {
+            RuntimeValue::Object(handle) | RuntimeValue::Array(handle) => tracer.mark(*handle),
+            RuntimeValue::Number(_)
+            | RuntimeValue::String(_)
+            | RuntimeValue::Boolean(_)
+            | RuntimeValue::Null
+            | RuntimeValue::Undefined => {}
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum HeapValue {
+    Object(BTreeMap<String, RuntimeValue>),
+    Array(Vec<RuntimeValue>),
+}
+
+impl Trace for HeapValue {
+    fn trace(&self, tracer: &mut Tracer<'_>) {
+        match self {
+            HeapValue::Object(fields) => {
+                for value in fields.values() {
+                    value.trace(tracer);
+                }
+            }
+            HeapValue::Array(values) => {
+                for value in values {
+                    value.trace(tracer);
+                }
+            }
+        }
+    }
+}
+
 struct Frame {
-    locals: Vec<Value>,
-    values: Vec<Value>,
+    locals: Vec<RuntimeValue>,
+    values: Vec<RuntimeValue>,
 }
 
 impl Frame {
-    fn new(function: &BytecodeFunction, args: Vec<Value>) -> Self {
+    fn new(function: &BytecodeFunction, args: Vec<RuntimeValue>) -> Self {
         let mut locals = args;
-        locals.resize(function.params.len(), Value::Undefined);
+        locals.resize(function.params.len(), RuntimeValue::Undefined);
         Self {
             locals,
             values: Vec::new(),
         }
     }
 
-    fn local(&self, index: u32) -> Result<&Value, ExecuteError> {
+    fn local(&self, index: u32) -> Result<&RuntimeValue, ExecuteError> {
         self.locals
             .get(index as usize)
             .ok_or_else(|| ExecuteError::Runtime(format!("local {index} missing")))
     }
 
-    fn store_local(&mut self, index: u32, value: Value) {
+    fn store_local(&mut self, index: u32, value: RuntimeValue) {
         let index = index as usize;
         if self.locals.len() <= index {
-            self.locals.resize(index + 1, Value::Undefined);
+            self.locals.resize(index + 1, RuntimeValue::Undefined);
         }
         self.locals[index] = value;
     }
 
-    fn value(&self, index: u32) -> Result<&Value, ExecuteError> {
+    fn value(&self, index: u32) -> Result<&RuntimeValue, ExecuteError> {
         self.values
             .get(index as usize)
             .ok_or_else(|| ExecuteError::Runtime(format!("value {index} missing")))
     }
 
-    fn push_value(&mut self, value: Value) {
+    fn push_value(&mut self, value: RuntimeValue) {
         self.values.push(value);
     }
 }
@@ -265,7 +328,7 @@ impl Frame {
 enum ControlFlow {
     Continue,
     Jump(u32),
-    Return(Value),
+    Return(RuntimeValue),
 }
 
 fn find_block(function: &BytecodeFunction, id: u32) -> Result<&BytecodeBlock, ExecuteError> {
@@ -276,15 +339,15 @@ fn find_block(function: &BytecodeFunction, id: u32) -> Result<&BytecodeBlock, Ex
         .ok_or_else(|| ExecuteError::Runtime(format!("block {id} missing")))
 }
 
-fn value_from_constant(constant: &Constant) -> Result<Value, ExecuteError> {
+fn value_from_constant(constant: &Constant) -> Result<RuntimeValue, ExecuteError> {
     Ok(match constant {
-        Constant::Number(value) => Value::Number(value.parse().map_err(|err| {
+        Constant::Number(value) => RuntimeValue::Number(value.parse().map_err(|err| {
             ExecuteError::Runtime(format!("invalid number constant `{value}`: {err}"))
         })?),
-        Constant::String(value) | Constant::Symbol(value) => Value::String(value.clone()),
-        Constant::Boolean(value) => Value::Boolean(*value),
-        Constant::Null => Value::Null,
-        Constant::Undefined => Value::Undefined,
+        Constant::String(value) | Constant::Symbol(value) => RuntimeValue::String(value.clone()),
+        Constant::Boolean(value) => RuntimeValue::Boolean(*value),
+        Constant::Null => RuntimeValue::Null,
+        Constant::Undefined => RuntimeValue::Undefined,
     })
 }
 
@@ -295,54 +358,79 @@ fn symbol_name(constant: &Constant) -> Result<&str, ExecuteError> {
     }
 }
 
-fn load_member(object: &Value, property: &str) -> Result<Value, ExecuteError> {
+fn load_member(
+    heap: &GcHeap<HeapValue>,
+    object: &RuntimeValue,
+    property: &str,
+) -> Result<RuntimeValue, ExecuteError> {
     match object {
-        Value::Object(fields) => Ok(fields
-            .borrow()
-            .get(property)
-            .cloned()
-            .unwrap_or(Value::Undefined)),
+        RuntimeValue::Object(handle) => match heap.get(*handle) {
+            Some(HeapValue::Object(fields)) => Ok(fields
+                .get(property)
+                .cloned()
+                .unwrap_or(RuntimeValue::Undefined)),
+            _ => Err(ExecuteError::Runtime("stale object handle".into())),
+        },
         _ => Err(ExecuteError::Runtime(format!(
             "cannot read property `{property}` from non-object"
         ))),
     }
 }
 
-fn store_member(object: &Value, property: &str, value: Value) -> Result<(), ExecuteError> {
+fn store_member(
+    heap: &mut GcHeap<HeapValue>,
+    object: &RuntimeValue,
+    property: &str,
+    value: RuntimeValue,
+) -> Result<(), ExecuteError> {
     match object {
-        Value::Object(fields) => {
-            fields.borrow_mut().insert(property.into(), value);
-            Ok(())
-        }
+        RuntimeValue::Object(handle) => match heap.get_mut(*handle) {
+            Some(HeapValue::Object(fields)) => {
+                fields.insert(property.into(), value);
+                Ok(())
+            }
+            _ => Err(ExecuteError::Runtime("stale object handle".into())),
+        },
         _ => Err(ExecuteError::Runtime(format!(
             "cannot write property `{property}` on non-object"
         ))),
     }
 }
 
-fn binary(op: u32, left: &Value, right: &Value) -> Result<Value, ExecuteError> {
+fn binary(
+    op: u32,
+    heap: &GcHeap<HeapValue>,
+    left: &RuntimeValue,
+    right: &RuntimeValue,
+) -> Result<RuntimeValue, ExecuteError> {
     match op {
         0 => match (left, right) {
-            (Value::String(left), right) => Ok(Value::String(format!("{left}{}", display(right)))),
-            (left, Value::String(right)) => Ok(Value::String(format!("{}{right}", display(left)))),
-            _ => Ok(Value::Number(number(left)? + number(right)?)),
+            (RuntimeValue::String(left), right) => Ok(RuntimeValue::String(format!(
+                "{left}{}",
+                display(heap, right)?
+            ))),
+            (left, RuntimeValue::String(right)) => Ok(RuntimeValue::String(format!(
+                "{}{right}",
+                display(heap, left)?
+            ))),
+            _ => Ok(RuntimeValue::Number(number(left)? + number(right)?)),
         },
-        1 => Ok(Value::Number(number(left)? - number(right)?)),
-        2 => Ok(Value::Number(number(left)? * number(right)?)),
-        3 => Ok(Value::Number(number(left)? / number(right)?)),
-        4 => Ok(Value::Number(number(left)? % number(right)?)),
-        5 => Ok(Value::Boolean(left == right)),
-        6 => Ok(Value::Boolean(left == right)),
-        7 => Ok(Value::Boolean(left != right)),
-        8 => Ok(Value::Boolean(left != right)),
-        9 => Ok(Value::Boolean(number(left)? < number(right)?)),
-        10 => Ok(Value::Boolean(number(left)? <= number(right)?)),
-        11 => Ok(Value::Boolean(number(left)? > number(right)?)),
-        12 => Ok(Value::Boolean(number(left)? >= number(right)?)),
-        13 => Ok(Value::Boolean(truthy(left) && truthy(right))),
-        14 => Ok(Value::Boolean(truthy(left) || truthy(right))),
+        1 => Ok(RuntimeValue::Number(number(left)? - number(right)?)),
+        2 => Ok(RuntimeValue::Number(number(left)? * number(right)?)),
+        3 => Ok(RuntimeValue::Number(number(left)? / number(right)?)),
+        4 => Ok(RuntimeValue::Number(number(left)? % number(right)?)),
+        5 => Ok(RuntimeValue::Boolean(left == right)),
+        6 => Ok(RuntimeValue::Boolean(left == right)),
+        7 => Ok(RuntimeValue::Boolean(left != right)),
+        8 => Ok(RuntimeValue::Boolean(left != right)),
+        9 => Ok(RuntimeValue::Boolean(number(left)? < number(right)?)),
+        10 => Ok(RuntimeValue::Boolean(number(left)? <= number(right)?)),
+        11 => Ok(RuntimeValue::Boolean(number(left)? > number(right)?)),
+        12 => Ok(RuntimeValue::Boolean(number(left)? >= number(right)?)),
+        13 => Ok(RuntimeValue::Boolean(truthy(left) && truthy(right))),
+        14 => Ok(RuntimeValue::Boolean(truthy(left) || truthy(right))),
         15 => {
-            if matches!(left, Value::Null | Value::Undefined) {
+            if matches!(left, RuntimeValue::Null | RuntimeValue::Undefined) {
                 Ok(right.clone())
             } else {
                 Ok(left.clone())
@@ -352,34 +440,86 @@ fn binary(op: u32, left: &Value, right: &Value) -> Result<Value, ExecuteError> {
     }
 }
 
-fn number(value: &Value) -> Result<f64, ExecuteError> {
+fn number(value: &RuntimeValue) -> Result<f64, ExecuteError> {
     match value {
-        Value::Number(value) => Ok(*value),
-        _ => Err(ExecuteError::Runtime(format!(
-            "expected number, found {}",
-            display(value)
-        ))),
+        RuntimeValue::Number(value) => Ok(*value),
+        _ => Err(ExecuteError::Runtime("expected number".into())),
     }
 }
 
-fn truthy(value: &Value) -> bool {
+fn truthy(value: &RuntimeValue) -> bool {
     match value {
-        Value::Boolean(value) => *value,
-        Value::Null | Value::Undefined => false,
-        Value::Number(value) => *value != 0.0,
-        Value::String(value) => !value.is_empty(),
-        Value::Object(_) | Value::Array(_) => true,
+        RuntimeValue::Boolean(value) => *value,
+        RuntimeValue::Null | RuntimeValue::Undefined => false,
+        RuntimeValue::Number(value) => *value != 0.0,
+        RuntimeValue::String(value) => !value.is_empty(),
+        RuntimeValue::Object(_) | RuntimeValue::Array(_) => true,
     }
 }
 
-fn display(value: &Value) -> String {
-    match value {
-        Value::Number(value) => value.to_string(),
-        Value::String(value) => value.clone(),
-        Value::Boolean(value) => value.to_string(),
-        Value::Null => "null".into(),
-        Value::Undefined => "undefined".into(),
-        Value::Object(_) => "[object Object]".into(),
-        Value::Array(values) => values.iter().map(display).collect::<Vec<_>>().join(","),
+fn display(heap: &GcHeap<HeapValue>, value: &RuntimeValue) -> Result<String, ExecuteError> {
+    Ok(match value {
+        RuntimeValue::Number(value) => value.to_string(),
+        RuntimeValue::String(value) => value.clone(),
+        RuntimeValue::Boolean(value) => value.to_string(),
+        RuntimeValue::Null => "null".into(),
+        RuntimeValue::Undefined => "undefined".into(),
+        RuntimeValue::Object(_) => "[object Object]".into(),
+        RuntimeValue::Array(handle) => match heap.get(*handle) {
+            Some(HeapValue::Array(values)) => values
+                .iter()
+                .map(|value| display(heap, value))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(","),
+            _ => return Err(ExecuteError::Runtime("stale array handle".into())),
+        },
+    })
+}
+
+fn runtime_roots(values: &[RuntimeValue]) -> Vec<HeapHandle> {
+    let mut roots = Vec::new();
+    for value in values {
+        extend_roots(value, &mut roots);
     }
+    roots
+}
+
+fn extend_roots(value: &RuntimeValue, roots: &mut Vec<HeapHandle>) {
+    match value {
+        RuntimeValue::Object(handle) | RuntimeValue::Array(handle) => roots.push(*handle),
+        RuntimeValue::Number(_)
+        | RuntimeValue::String(_)
+        | RuntimeValue::Boolean(_)
+        | RuntimeValue::Null
+        | RuntimeValue::Undefined => {}
+    }
+}
+
+fn materialize(value: &RuntimeValue, heap: &GcHeap<HeapValue>) -> Result<Value, ExecuteError> {
+    Ok(match value {
+        RuntimeValue::Number(value) => Value::Number(*value),
+        RuntimeValue::String(value) => Value::String(value.clone()),
+        RuntimeValue::Boolean(value) => Value::Boolean(*value),
+        RuntimeValue::Null => Value::Null,
+        RuntimeValue::Undefined => Value::Undefined,
+        RuntimeValue::Object(handle) => match heap.get(*handle) {
+            Some(HeapValue::Object(fields)) => {
+                let mut materialized = BTreeMap::new();
+                for (name, value) in fields {
+                    materialized.insert(name.clone(), materialize(value, heap)?);
+                }
+                Value::Object(materialized)
+            }
+            _ => return Err(ExecuteError::Runtime("stale object handle".into())),
+        },
+        RuntimeValue::Array(handle) => match heap.get(*handle) {
+            Some(HeapValue::Array(values)) => Value::Array(
+                values
+                    .iter()
+                    .map(|value| materialize(value, heap))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            _ => return Err(ExecuteError::Runtime("stale array handle".into())),
+        },
+    })
 }

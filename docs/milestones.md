@@ -110,14 +110,18 @@ Deferred from M6:
 
 ## M7: Heap And GC
 
-Status: next.
+Status: implemented.
 
-Planned acceptance:
+Acceptance evidence:
 
-- Managed allocation works.
-- Unreachable objects are collected.
-- Handles cross-boundary references safely.
-- Has stress tests.
+- `runtime/heap` provides managed allocation through generation-checked
+  `HeapHandle` values.
+- The collector traces explicit roots and collects unreachable objects.
+- Stale handles fail to resolve after slot reuse.
+- The interpreter allocates runtime objects and arrays through the managed heap.
+- Return values and host `console.log` arguments are treated as cross-boundary
+  roots before output materialization.
+- Stress tests cover large volumes of unreachable allocations.
 
 ## M8-M13
 

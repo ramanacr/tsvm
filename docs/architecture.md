@@ -18,10 +18,24 @@ engine; TypeScript follows a separate pipeline.
 ```
 
 The current repository implements the lexer, shared AST, parser, semantic
-analysis, typed IR, bytecode encoding/decoding, bytecode verifier, and
-verified-bytecode interpreter milestones. Empty directories exist for later
-stages so code can land in the intended ownership boundaries without reshaping
-the project each time.
+analysis, typed IR, bytecode encoding/decoding, bytecode verifier,
+verified-bytecode interpreter, and managed heap milestones. Empty directories
+exist for later stages so code can land in the intended ownership boundaries
+without reshaping the project each time.
+
+## Heap And Runtime Values
+
+Runtime objects and arrays are allocated in `runtime/heap` and referenced by
+generation-checked handles. The first collector is intentionally non-moving:
+slots can be reused after collection, but every reuse advances the generation so
+old handles fail closed instead of resolving to a different object.
+
+The interpreter keeps primitive values inline and stores aggregate values behind
+heap handles. Before execution output crosses the host boundary, the
+interpreter roots the return value and `console.log` arguments, runs collection,
+and materializes those rooted values into plain API values. This models the
+future browser boundary where DOM wrappers, JS interop values, and host-visible
+objects must be explicit roots.
 
 ## Runtime Boundary
 
