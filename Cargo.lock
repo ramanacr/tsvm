@@ -81,3 +81,11 @@ dependencies = [
  "tsvm-ast",
  "tsvm-parser",
 ]
+
+[[package]]
+name = "tsvm-web-bindings"
+version = "0.1.0"
+dependencies = [
+ "tsvm-interop",
+ "tsvm-interpreter",
+]

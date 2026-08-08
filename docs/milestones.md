@@ -184,7 +184,27 @@ Deferred from M10:
   integration, DevTools hooks, and renderer-process embedding are deferred until
   the C++ integration phase.
 
-## M11-M13
+## M11: DOM And Fetch
+
+Status: implemented for the standalone host binding model.
+
+Acceptance evidence:
+
+- `web-bindings/dom-fetch` exposes a host-owned document model.
+- TypeScript can mutate host document text through `domSetText`.
+- TypeScript can read host document text through `domText`.
+- TypeScript can fetch same-origin text resources through `fetchText`.
+- Cross-origin fetch URLs are blocked before response data enters TSVM.
+- Binding calls cross the same explicit interop boundary as M9.
+- DOM/fetch fixtures live in `tests/fixtures/web-bindings`.
+
+Deferred from M11:
+
+- Full DOM APIs, event dispatch, timers, async fetch promises, browser network
+  service integration, and CSP-enforced resource loading are deferred to
+  security hardening and browser integration work.
+
+## M12-M13
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.

@@ -20,12 +20,12 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Add DOM binding traits for querying and mutating a host document model.
-- Add fetch binding traits that preserve same-origin checks before network-like
-  responses enter TSVM.
-- Preserve verifier-first execution before DOM/fetch host capabilities are
-  exposed.
-- Expand fixtures into browser binding tests for DOM mutation and fetch.
+- Expand security hardening around verifier bypass attempts, malformed module
+  graphs, cross-origin binding calls, and host capability misuse.
+- Add policy tests for CSP/script loading and origin decisions.
+- Add crash-regression fixtures for parser, bytecode decoder, verifier, module
+  graph, interop, and web bindings.
+- Preserve verifier-first execution before any host capability is invoked.
 - Add coverage-guided fuzzing once the Rust toolchain and CI environment can
   support `cargo-fuzz`.
 

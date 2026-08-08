@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InteropValue {
@@ -26,7 +26,7 @@ impl InteropError {
     }
 }
 
-pub type HostFunction = fn(&[InteropValue]) -> Result<InteropValue, InteropError>;
+type HostFunction = Rc<dyn Fn(&[InteropValue]) -> Result<InteropValue, InteropError>>;
 
 #[derive(Clone, Default)]
 pub struct HostEnvironment {
@@ -38,13 +38,21 @@ impl HostEnvironment {
         Self::default()
     }
 
-    pub fn with_function(mut self, name: impl Into<String>, function: HostFunction) -> Self {
-        self.functions.insert(name.into(), function);
+    pub fn with_function(
+        mut self,
+        name: impl Into<String>,
+        function: impl Fn(&[InteropValue]) -> Result<InteropValue, InteropError> + 'static,
+    ) -> Self {
+        self.functions.insert(name.into(), Rc::new(function));
         self
     }
 
-    pub fn insert_function(&mut self, name: impl Into<String>, function: HostFunction) {
-        self.functions.insert(name.into(), function);
+    pub fn insert_function(
+        &mut self,
+        name: impl Into<String>,
+        function: impl Fn(&[InteropValue]) -> Result<InteropValue, InteropError> + 'static,
+    ) {
+        self.functions.insert(name.into(), Rc::new(function));
     }
 
     pub fn call(

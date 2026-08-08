@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M10 standalone runtime foundation from
+This repository currently implements the M0-M11 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -64,15 +64,17 @@ This repository currently implements the M0-M10 standalone runtime foundation fr
   executes external and inline TypeScript through TSVM, ignores normal
   JavaScript scripts, and records that no JavaScript is generated for the TS
   path.
+- DOM/fetch binding model that exposes stateful host document mutation and
+  same-origin text fetch through explicit interop host functions.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
 - Deterministic corpus smoke runner for fuzz-like CI coverage.
 - Architecture, security, roadmap, milestone, and ADR documentation.
 
-Full Chromium integration, DOM bindings, and fetch bindings are intentionally
-not implemented yet. The implementation document starts with the standalone
-pipeline so it can be proven before browser embedding begins.
+Full Chromium integration is intentionally not implemented yet. The
+implementation document starts with the standalone pipeline so it can be proven
+before browser embedding begins.
 
 ## Repository Layout
 
@@ -92,6 +94,7 @@ runtime/                  TypeScript-native compiler and VM components
   modules/                Implemented M8 local module graph resolver
   interop/                Implemented M9 standalone host interop values
 web-bindings/             Future console, DOM, fetch, timers, events bindings
+  dom-fetch/              Implemented M11 DOM text and fetch host bindings
 interop/                  Future JS/TS value and call boundary
 security/                 Threat model, sandbox, CSP, and origin policy notes
 tests/fixtures/lexer/     Valid and invalid lexer corpus
@@ -103,6 +106,7 @@ tests/fixtures/interpreter/ Valid interpreter corpus
 tests/fixtures/modules/   Valid and invalid local module corpus
 tests/fixtures/interop/   Valid interop boundary corpus
 tests/fixtures/browser/   Valid script-loader browser fixture corpus
+tests/fixtures/web-bindings/ Valid DOM/fetch binding corpus
 tools/                    Developer tools and corpus runners
 docs/adr/                 Architecture decision records
 ```
@@ -335,6 +339,35 @@ the TSVM pipeline. External `.ts` scripts can use the M8 module graph resolver;
 inline TypeScript is compiled directly. Normal JavaScript script tags are left
 alone for a future browser/V8 integration path.
 
+## DOM And Fetch Binding API
+
+```rust
+use std::collections::BTreeMap;
+use tsvm_interpreter::execute_source_with_host;
+use tsvm_web_bindings::{BrowserBindings, Document, FetchService};
+
+let bindings = BrowserBindings::new(
+    Document::from_text_nodes([("#app", "")]),
+    FetchService::new(
+        "https://example.test",
+        BTreeMap::from([("/message.txt".into(), "hello".into())]),
+    ),
+);
+
+let source = r##"
+function domSetText(selector: string, text: string): undefined { return undefined; }
+function fetchText(url: string): string { return ""; }
+domSetText("#app", fetchText("/message.txt"));
+"##;
+execute_source_with_host(source, &bindings.host_environment())?;
+assert_eq!(bindings.document().text("#app"), Some("hello".into()));
+```
+
+M11 keeps DOM and fetch behind host capabilities. TypeScript calls named binding
+functions that cross the same `InteropValue` boundary introduced in M9. Fetch
+allows relative and same-origin URLs and rejects cross-origin URLs before data
+enters TSVM.
+
 ## V0.1 Lexer Scope
 
 Supported token families:
@@ -350,7 +383,7 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M11 with DOM and fetch bindings.
+Deferred language work now starts in M12 with security hardening.
 
 ## Security Posture
 
@@ -369,8 +402,8 @@ See:
 
 ## Roadmap
 
-The next milestone is M11: DOM and fetch bindings. The longer sequence
-continues with security hardening and performance research.
+The next milestone is M12: security hardening. The longer sequence continues
+with performance research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

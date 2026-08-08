@@ -11,6 +11,7 @@ members = [
     "runtime/modules",
     "runtime/interop",
     "browser/script-loader",
+    "web-bindings/dom-fetch",
 ]
 resolver = "2"
 

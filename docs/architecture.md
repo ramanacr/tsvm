@@ -24,6 +24,19 @@ interop-boundary milestones, plus a standalone browser script-loader model.
 Empty directories exist for later stages so code can land in the intended
 ownership boundaries without reshaping the project each time.
 
+## DOM And Fetch Bindings
+
+`web-bindings/dom-fetch` exposes a minimal host document and same-origin fetch
+service through `HostEnvironment`. TSVM code reaches DOM and fetch only by
+calling registered host functions. The binding converts values through
+`InteropValue`, mutates host-owned document state outside the TS heap, and
+rejects cross-origin fetch URLs before response text enters the runtime.
+
+The initial binding names are deliberately explicit (`domText`, `domSetText`,
+and `fetchText`) so the current semantic analyzer can type-check them with
+ordinary TypeScript stubs. Future browser work can replace those stubs with
+ambient DOM declarations.
+
 ## Script Loading
 
 `browser/script-loader` models the future Chromium hook for
