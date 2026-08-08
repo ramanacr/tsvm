@@ -123,7 +123,23 @@ Acceptance evidence:
   roots before output materialization.
 - Stress tests cover large volumes of unreachable allocations.
 
-## M8-M13
+## M8: Modules
+
+Status: implemented.
+
+Acceptance evidence:
+
+- `runtime/modules` resolves local relative `.ts` module imports.
+- Module graph traversal is dependency-first and deterministic.
+- Missing modules, unsupported specifiers, parser errors, and cycles produce
+  structured diagnostics.
+- Exports are collected from interfaces, type aliases, classes, functions, and
+  variables.
+- `execute_module_graph` compiles bundled module sources through the existing
+  semantic analyzer, typed IR, bytecode verifier, interpreter, and heap path.
+- Valid and invalid module fixtures live in `tests/fixtures/modules`.
+
+## M9-M13
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.

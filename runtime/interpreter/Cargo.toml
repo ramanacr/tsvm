@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 tsvm-bytecode = { path = "../bytecode" }
 tsvm-heap = { path = "../heap" }
+tsvm-modules = { path = "../modules" }
 tsvm-semantic = { path = "../semantic" }
 
 [lib]

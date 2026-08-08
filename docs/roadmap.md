@@ -20,13 +20,12 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Implement deterministic local module loading for `import` and `export`
-  declarations.
-- Add module graph diagnostics for missing files, unsupported specifiers, and
-  cycles.
-- Preserve verifier-first execution across multi-module compilation.
-- Expand fixtures into a shared corpus used by module, interop, and browser
-  binding tests.
+- Define the JS/TS value model for primitives, objects, arrays, callable
+  handles, exceptions, and promise-like async boundaries.
+- Add safe host-handle ownership rules that build on the M7 heap handles.
+- Preserve verifier-first execution when host functions are exposed to TSVM.
+- Expand fixtures into a shared corpus used by interop and browser binding
+  tests.
 - Add coverage-guided fuzzing once the Rust toolchain and CI environment can
   support `cargo-fuzz`.
 

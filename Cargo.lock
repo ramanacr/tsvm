@@ -28,6 +28,7 @@ version = "0.1.0"
 dependencies = [
  "tsvm-bytecode",
  "tsvm-heap",
+ "tsvm-modules",
  "tsvm-semantic",
 ]
 
@@ -43,6 +44,14 @@ dependencies = [
 [[package]]
 name = "tsvm-lexer"
 version = "0.1.0"
+
+[[package]]
+name = "tsvm-modules"
+version = "0.1.0"
+dependencies = [
+ "tsvm-ast",
+ "tsvm-parser",
+]
 
 [[package]]
 name = "tsvm-parser"

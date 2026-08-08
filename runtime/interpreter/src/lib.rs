@@ -7,6 +7,7 @@ use tsvm_bytecode::{
     Instruction, Opcode, VerifyError,
 };
 use tsvm_heap::{CollectionReport, GcHeap, HeapHandle, Trace, Tracer};
+use tsvm_modules::{bundle_module_graph, ModuleDiagnostic};
 use tsvm_semantic::SemanticDiagnostic;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -36,6 +37,7 @@ pub enum Value {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExecuteError {
+    Module(Vec<ModuleDiagnostic>),
     Compile(Vec<SemanticDiagnostic>),
     Verify(Vec<VerifyError>),
     Runtime(String),
@@ -47,6 +49,14 @@ pub fn execute_source(source: &str) -> Result<ExecutionOutput, ExecuteError> {
         return Err(ExecuteError::Compile(compiled.diagnostics));
     };
     execute_module(&module)
+}
+
+pub fn execute_module_graph(
+    entry: &str,
+    sources: &BTreeMap<String, String>,
+) -> Result<ExecutionOutput, ExecuteError> {
+    let graph = bundle_module_graph(entry, sources).map_err(ExecuteError::Module)?;
+    execute_source(&graph.bundled_source)
 }
 
 pub fn execute_module(module: &BytecodeModule) -> Result<ExecutionOutput, ExecuteError> {

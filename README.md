@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M7 standalone runtime foundation from
+This repository currently implements the M0-M8 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -52,13 +52,17 @@ This repository currently implements the M0-M7 standalone runtime foundation fro
   stale-handle rejection, and stress coverage for unreachable allocation churn.
 - Interpreter object and array allocation through the managed heap, with
   return values and console output treated as cross-boundary roots.
+- Deterministic local module graph resolver for relative `.ts` imports and
+  exports, including dependency-first ordering, cycle detection, missing-module
+  diagnostics, unsupported-specifier diagnostics, and bundled execution through
+  the verified TSVM pipeline.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
 - Deterministic corpus smoke runner for fuzz-like CI coverage.
 - Architecture, security, roadmap, milestone, and ADR documentation.
 
-Chromium integration, modules, JS interop, DOM bindings, and fetch bindings are
+Chromium integration, JS interop, DOM bindings, and fetch bindings are
 intentionally not implemented yet. The implementation document starts with the
 standalone pipeline so it can be proven before browser embedding begins.
 
@@ -76,6 +80,7 @@ runtime/                  TypeScript-native compiler and VM components
   verifier/               Future expanded verifier internals
   interpreter/            Implemented M6 verified-bytecode interpreter
   heap/                   Implemented M7 managed heap and tracing collector
+  modules/                Implemented M8 local module graph resolver
 web-bindings/             Future console, DOM, fetch, timers, events bindings
 interop/                  Future JS/TS value and call boundary
 security/                 Threat model, sandbox, CSP, and origin policy notes
@@ -85,6 +90,7 @@ tests/fixtures/semantic/  Valid and invalid semantic corpus
 tests/fixtures/ir/        Valid IR lowering corpus
 tests/fixtures/bytecode/  Valid bytecode corpus
 tests/fixtures/interpreter/ Valid interpreter corpus
+tests/fixtures/modules/   Valid and invalid local module corpus
 tools/                    Developer tools and corpus runners
 docs/adr/                 Architecture decision records
 ```
@@ -234,6 +240,29 @@ with a new generation so stale handles do not resolve. The interpreter uses the
 heap for runtime objects and arrays, then roots return values and console output
 before final materialization.
 
+## Module Graph API
+
+```rust
+use std::collections::BTreeMap;
+use tsvm_interpreter::{execute_module_graph, Value};
+
+let sources = BTreeMap::from([
+    ("/app.ts".into(), r#"import { answer } from "./answer.ts";
+console.log(answer);"#.into()),
+    ("/answer.ts".into(), "export const answer: number = 42;".into()),
+]);
+
+let output = execute_module_graph("/app.ts", &sources)?;
+assert_eq!(output.console, vec![Value::Number(42.0)]);
+```
+
+M8 supports local relative `.ts` module specifiers such as `./account.ts` and
+`../shared/math.ts`. Modules are parsed directly as TypeScript, ordered with a
+deterministic dependency-first graph walk, bundled without import/export syntax,
+and then compiled through semantic analysis, typed IR, verified bytecode, and
+the interpreter. Non-local specifiers and cycles are rejected before
+compilation.
+
 ## V0.1 Lexer Scope
 
 Supported token families:
@@ -249,7 +278,7 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M8 with deterministic local module loading.
+Deferred language work now starts in M9 with JS/TS interop boundary modeling.
 
 ## Security Posture
 
@@ -268,9 +297,9 @@ See:
 
 ## Roadmap
 
-The next milestone is M8: deterministic local module loading with cycle
-detection and clear diagnostics. The longer sequence continues with interop,
-browser embedding, DOM/fetch, hardening, and performance research.
+The next milestone is M9: JS/TS interop value and call boundary modeling. The
+longer sequence continues with browser embedding, DOM/fetch, hardening, and
+performance research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

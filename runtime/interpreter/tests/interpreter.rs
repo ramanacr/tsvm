@@ -1,5 +1,5 @@
 use tsvm_bytecode::{compile_source, decode_module, encode_module, Opcode};
-use tsvm_interpreter::{execute_module, execute_source, ExecuteError, Value};
+use tsvm_interpreter::{execute_module, execute_module_graph, execute_source, ExecuteError, Value};
 
 fn initial_demo_source() -> &'static str {
     r#"
@@ -66,6 +66,57 @@ console.log(account);
     assert_eq!(output.heap.live_objects, 1);
     assert_eq!(output.heap.last_collection.marked, 1);
     assert_eq!(output.heap.last_collection.collected, 0);
+}
+
+#[test]
+fn executes_local_module_graph_without_javascript_generation() {
+    let sources = std::collections::BTreeMap::from([
+        (
+            "/app.ts".into(),
+            r#"
+import { Account, credit } from "./account.ts";
+
+const account: Account = {
+  id: 1,
+  balance: 100
+};
+
+console.log(credit(account, 50));
+"#
+            .into(),
+        ),
+        (
+            "/account.ts".into(),
+            r#"
+export interface Account {
+  id: number;
+  balance: number;
+}
+
+export function credit(account: Account, amount: number): number {
+  account.balance += amount;
+  return account.balance;
+}
+"#
+            .into(),
+        ),
+    ]);
+
+    let output = execute_module_graph("/app.ts", &sources).expect("module graph should execute");
+
+    assert_eq!(output.console, vec![Value::Number(150.0)]);
+}
+
+#[test]
+fn reports_module_diagnostics_before_compilation() {
+    let sources = std::collections::BTreeMap::from([(
+        "/app.ts".into(),
+        r#"import { value } from "pkg"; console.log(value);"#.into(),
+    )]);
+
+    let err = execute_module_graph("/app.ts", &sources).expect_err("module diagnostics expected");
+
+    assert!(matches!(err, ExecuteError::Module(_)));
 }
 
 #[test]

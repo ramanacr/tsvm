@@ -8,6 +8,7 @@ members = [
     "runtime/bytecode",
     "runtime/interpreter",
     "runtime/heap",
+    "runtime/modules",
 ]
 resolver = "2"
 

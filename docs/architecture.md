@@ -19,9 +19,23 @@ engine; TypeScript follows a separate pipeline.
 
 The current repository implements the lexer, shared AST, parser, semantic
 analysis, typed IR, bytecode encoding/decoding, bytecode verifier,
-verified-bytecode interpreter, and managed heap milestones. Empty directories
-exist for later stages so code can land in the intended ownership boundaries
-without reshaping the project each time.
+verified-bytecode interpreter, managed heap, and local module graph milestones.
+Empty directories exist for later stages so code can land in the intended
+ownership boundaries without reshaping the project each time.
+
+## Module Loading
+
+The standalone runtime resolves local relative `.ts` imports through
+`runtime/modules`. The module graph builder parses every reachable source file,
+rejects unsupported specifiers and missing modules, detects cycles during DFS,
+and emits modules in dependency-first order. For the current standalone runtime,
+exports are unwrapped and imports are stripped into a deterministic bundled
+source string that then enters the normal semantic-analysis, IR, bytecode,
+verifier, and interpreter path.
+
+This is deliberately not a browser loader yet. Network fetch, MIME checks, CSP,
+origin policy, and module map integration belong to the browser binding
+milestones.
 
 ## Heap And Runtime Values
 
