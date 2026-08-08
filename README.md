@@ -117,6 +117,7 @@ tests/fixtures/web-bindings/ Valid DOM/fetch binding corpus
 tests/fixtures/security/ Crash and policy regression corpus
 tools/                    Developer tools and corpus runners
   benchmarks/             Implemented M13 interpreter benchmark runner
+  demo/                   End-to-end command-line demo
 docs/adr/                 Architecture decision records
 ```
 
@@ -139,8 +140,22 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo run -p tsvm-lexer --bin lexer_corpus_runner -- tests/fixtures/lexer
+cargo run -p tsvm-demo
 cargo run -p tsvm-benchmarks -- 100
 ```
+
+## See It In Action
+
+Run:
+
+```sh
+cargo +stable-x86_64-pc-windows-gnu run -p tsvm-demo
+```
+
+The demo prints a complete standalone proof: TypeScript source, the native TSVM
+pipeline invariant, no generated JavaScript, the initial `150` account demo,
+`text/typescript` script loading, DOM mutation from a same-origin fetch,
+cross-origin fetch blocking, and a short benchmark snapshot.
 
 ## Lexer API
 

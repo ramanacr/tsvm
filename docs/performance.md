@@ -9,6 +9,12 @@ Run:
 cargo run -p tsvm-benchmarks -- 100
 ```
 
+For a more narrative end-to-end runtime demonstration, run:
+
+```sh
+cargo run -p tsvm-demo
+```
+
 Output is CSV:
 
 ```text

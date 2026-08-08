@@ -26,6 +26,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsvm-demo"
+version = "0.1.0"
+dependencies = [
+ "tsvm-benchmarks",
+ "tsvm-interpreter",
+ "tsvm-script-loader",
+ "tsvm-web-bindings",
+]
+
+[[package]]
 name = "tsvm-heap"
 version = "0.1.0"
 
