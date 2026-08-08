@@ -20,13 +20,14 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Add a bytecode interpreter that refuses to run unverified modules.
-- Execute the initial demo through bytecode far enough to produce `150` via a
-  host `console.log` capability.
-- Add runtime values for primitives, objects, arrays, functions, and member
-  access.
-- Expand fixtures into a shared corpus used by interpreter, heap/GC, module,
-  and interop tests.
+- Replace the current reference-counted object handles with an explicit heap
+  abstraction that can evolve toward tracing GC.
+- Add allocation APIs, roots, handle types, and stress tests for object and
+  array lifetimes.
+- Preserve verifier-first execution while moving runtime objects behind managed
+  handles.
+- Expand fixtures into a shared corpus used by heap/GC, module, and interop
+  tests.
 - Add coverage-guided fuzzing once the Rust toolchain and CI environment can
   support `cargo-fuzz`.
 

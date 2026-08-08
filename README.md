@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M5 foundation from
+This repository currently implements the M0-M6 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -45,11 +45,17 @@ This repository currently implements the M0-M5 foundation from
   references, local references, value references, jump targets, source
   references, exception table entries, terminators, and basic type states.
 - Bytecode fixture corpus for compile, verify, encode, and decode roundtrips.
+- Verified-bytecode interpreter with runtime values for primitives, objects,
+  arrays, local variables, member access/mutation, function calls, arithmetic,
+  branches, returns, and a host `console.log` capability.
+- Initial demo execution proof: `.ts` source reaches parser, AST, semantic
+  analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
+- Interpreter fixture corpus for verified execution.
 - Deterministic corpus smoke runner for fuzz-like CI coverage.
 - Architecture, security, roadmap, milestone, and ADR documentation.
 
-Chromium integration, interpreter, heap/GC, DOM bindings, fetch bindings, and
-JS interop are intentionally not implemented yet. The implementation document
+Chromium integration, heap/GC, modules, JS interop, DOM bindings, and fetch
+bindings are intentionally not implemented yet. The implementation document
 starts with the standalone pipeline so it can be proven before browser
 embedding begins.
 
@@ -65,7 +71,7 @@ runtime/                  TypeScript-native compiler and VM components
   ir/                     Implemented M4 typed intermediate representation
   bytecode/               Implemented M5 bytecode encoder/decoder/verifier
   verifier/               Future expanded verifier internals
-  interpreter/            Future verified-bytecode interpreter
+  interpreter/            Implemented M6 verified-bytecode interpreter
 web-bindings/             Future console, DOM, fetch, timers, events bindings
 interop/                  Future JS/TS value and call boundary
 security/                 Threat model, sandbox, CSP, and origin policy notes
@@ -74,6 +80,7 @@ tests/fixtures/parser/    Valid parser corpus
 tests/fixtures/semantic/  Valid and invalid semantic corpus
 tests/fixtures/ir/        Valid IR lowering corpus
 tests/fixtures/bytecode/  Valid bytecode corpus
+tests/fixtures/interpreter/ Valid interpreter corpus
 tools/                    Developer tools and corpus runners
 docs/adr/                 Architecture decision records
 ```
@@ -172,6 +179,25 @@ The bytecode generator compiles verified IR into a deterministic module format.
 The verifier treats compiler output as untrusted and must pass before any future
 interpreter executes bytecode.
 
+## Interpreter API
+
+```rust
+use tsvm_interpreter::{execute_source, Value};
+
+let output = execute_source(r#"
+function add(a: number, b: number): number {
+  return a + b;
+}
+console.log(add(40, 2));
+"#)?;
+
+assert_eq!(output.console, vec![Value::Number(42.0)]);
+```
+
+The interpreter only executes modules that pass bytecode verification. Invalid
+source returns semantic diagnostics before bytecode execution; malformed modules
+return verifier errors before runtime state is created.
+
 ## V0.1 Lexer Scope
 
 Supported token families:
@@ -187,7 +213,8 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M6 with the interpreter.
+Deferred language work now starts in M7 with heap/GC and runtime memory model
+hardening.
 
 ## Security Posture
 
@@ -206,9 +233,9 @@ See:
 
 ## Roadmap
 
-The next milestone is M6: an interpreter that executes only verified bytecode.
-The longer sequence continues with heap/GC, modules, interop, browser
-embedding, DOM/fetch, hardening, and performance research.
+The next milestone is M7: managed allocation, garbage collection strategy, and
+safe cross-boundary handles. The longer sequence continues with modules,
+interop, browser embedding, DOM/fetch, hardening, and performance research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

@@ -1,0 +1,20 @@
+[package]
+name = "tsvm-interpreter"
+version = "0.1.0"
+description = "Verified bytecode interpreter for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tsvm-bytecode = { path = "../bytecode" }
+tsvm-semantic = { path = "../semantic" }
+
+[lib]
+name = "tsvm_interpreter"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+

@@ -19,6 +19,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsvm-interpreter"
+version = "0.1.0"
+dependencies = [
+ "tsvm-bytecode",
+ "tsvm-semantic",
+]
+
+[[package]]
 name = "tsvm-ir"
 version = "0.1.0"
 dependencies = [

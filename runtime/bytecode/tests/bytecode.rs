@@ -62,6 +62,34 @@ fn bytecode_encoding_is_deterministic_and_decodes_safely() {
 }
 
 #[test]
+fn object_and_array_literals_preserve_value_operands() {
+    let module = compile_source(
+        r#"
+const account = { id: 1, balance: 100 };
+const values = [1, 2, 3];
+"#,
+    )
+    .module
+    .expect("literal source should compile");
+
+    verify_module(&module).expect("literal bytecode should verify");
+    let entry = module
+        .functions
+        .iter()
+        .find(|function| function.name == "__entry")
+        .expect("entry function should exist");
+
+    assert!(entry.blocks[0]
+        .instructions
+        .iter()
+        .any(|instruction| matches!(instruction.opcode, Opcode::BuildObject)));
+    assert!(entry.blocks[0]
+        .instructions
+        .iter()
+        .any(|instruction| matches!(instruction.opcode, Opcode::BuildArray)));
+}
+
+#[test]
 fn decoder_rejects_malformed_header() {
     let err = decode_module(b"NOPE").expect_err("bad magic should not decode");
     assert!(err.message.contains("magic"));

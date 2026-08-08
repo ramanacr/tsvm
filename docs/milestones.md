@@ -86,16 +86,40 @@ Acceptance evidence:
 
 ## M6: Interpreter
 
+Status: implemented.
+
+Acceptance evidence:
+
+- `runtime/interpreter` refuses to execute modules that fail bytecode
+  verification.
+- `execute_source` compiles TypeScript through semantic analysis, typed IR,
+  bytecode, verifier, and interpreter without generating JavaScript.
+- Runtime values support numbers, strings, booleans, null, undefined, objects,
+  and arrays.
+- Interpreter supports local variables, member access, member mutation,
+  arithmetic, function calls, branches, jumps, returns, and host `console.log`.
+- The initial demo logs `150` through verified bytecode execution.
+- Fixture coverage lives in `tests/fixtures/interpreter`.
+
+Deferred from M6:
+
+- Exceptions are parsed and represented, but full exception table execution is
+  deferred to a later hardening pass.
+- Classes lower structurally today; constructor/runtime class semantics are
+  deferred until object model work matures.
+
+## M7: Heap And GC
+
 Status: next.
 
 Planned acceptance:
 
-- Execute verified bytecode.
-- Support primitives, objects, arrays, functions, and classes.
-- Support exceptions.
-- Pass behavioral fixtures.
+- Managed allocation works.
+- Unreachable objects are collected.
+- Handles cross-boundary references safely.
+- Has stress tests.
 
-## M7-M13
+## M8-M13
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.

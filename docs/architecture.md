@@ -18,9 +18,10 @@ engine; TypeScript follows a separate pipeline.
 ```
 
 The current repository implements the lexer, shared AST, parser, semantic
-analysis, typed IR, bytecode encoding/decoding, and bytecode verifier
-milestones. Empty directories exist for later stages so code can land in the
-intended ownership boundaries without reshaping the project each time.
+analysis, typed IR, bytecode encoding/decoding, bytecode verifier, and
+verified-bytecode interpreter milestones. Empty directories exist for later
+stages so code can land in the intended ownership boundaries without reshaping
+the project each time.
 
 ## Runtime Boundary
 

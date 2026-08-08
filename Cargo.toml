@@ -6,6 +6,7 @@ members = [
     "runtime/semantic",
     "runtime/ir",
     "runtime/bytecode",
+    "runtime/interpreter",
 ]
 resolver = "2"
 

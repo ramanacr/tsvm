@@ -67,6 +67,8 @@ pub struct Instruction {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Opcode {
     LoadConst,
+    BuildObject,
+    BuildArray,
     LoadLocal,
     StoreLocal,
     LoadMember,
@@ -394,8 +396,12 @@ impl Compiler {
         let type_tag = type_tag(&instruction.ty);
         match &instruction.kind {
             IrInstructionKind::LoadConst(constant) => Instruction {
-                opcode: Opcode::LoadConst,
-                operands: vec![self.intern_ir_const(constant)],
+                opcode: match constant {
+                    IrConst::Object(_) => Opcode::BuildObject,
+                    IrConst::Array(_) => Opcode::BuildArray,
+                    _ => Opcode::LoadConst,
+                },
+                operands: self.ir_const_operands(constant),
                 type_tag,
                 source_ref,
             },
@@ -478,17 +484,27 @@ impl Compiler {
         }
     }
 
-    fn intern_ir_const(&mut self, constant: &IrConst) -> u32 {
-        let constant = match constant {
-            IrConst::Number(value) => Constant::Number(value.clone()),
-            IrConst::String(value) => Constant::String(value.clone()),
-            IrConst::Boolean(value) => Constant::Boolean(*value),
-            IrConst::Null => Constant::Null,
-            IrConst::Undefined => Constant::Undefined,
-            IrConst::Object(_) => Constant::Symbol("<object-literal>".into()),
-            IrConst::Array(_) => Constant::Symbol("<array-literal>".into()),
-        };
-        self.intern_constant(constant)
+    fn ir_const_operands(&mut self, constant: &IrConst) -> Vec<u32> {
+        match constant {
+            IrConst::Number(value) => vec![self.intern_constant(Constant::Number(value.clone()))],
+            IrConst::String(value) => vec![self.intern_constant(Constant::String(value.clone()))],
+            IrConst::Boolean(value) => vec![self.intern_constant(Constant::Boolean(*value))],
+            IrConst::Null => vec![self.intern_constant(Constant::Null)],
+            IrConst::Undefined => vec![self.intern_constant(Constant::Undefined)],
+            IrConst::Object(properties) => {
+                let mut operands = vec![properties.len() as u32];
+                for (name, value) in properties {
+                    operands.push(self.intern_constant(Constant::Symbol(name.clone())));
+                    operands.push(value.0 as u32);
+                }
+                operands
+            }
+            IrConst::Array(elements) => {
+                let mut operands = vec![elements.len() as u32];
+                operands.extend(elements.iter().map(|value| value.0 as u32));
+                operands
+            }
+        }
     }
 
     fn intern_constant(&mut self, constant: Constant) -> u32 {
@@ -601,6 +617,46 @@ impl Verifier<'_> {
             Opcode::LoadConst => {
                 self.expect_operands(instruction, 1);
                 self.check_constant(instruction.operands.first().copied());
+                self.define_value(instruction, defined_values);
+            }
+            Opcode::BuildObject => {
+                if let Some(count) = instruction.operands.first().copied() {
+                    let expected = 1 + count as usize * 2;
+                    if instruction.operands.len() != expected {
+                        self.error(
+                            VerifyErrorCode::InvalidValueReference,
+                            "object operand count does not match property count",
+                        );
+                    }
+                    for pair in instruction.operands[1..].chunks(2) {
+                        self.check_constant(pair.first().copied());
+                        self.check_value(pair.get(1).copied(), defined_values);
+                    }
+                } else {
+                    self.error(
+                        VerifyErrorCode::InvalidValueReference,
+                        "object instruction missing property count",
+                    );
+                }
+                self.define_value(instruction, defined_values);
+            }
+            Opcode::BuildArray => {
+                if let Some(count) = instruction.operands.first().copied() {
+                    if instruction.operands.len() != count as usize + 1 {
+                        self.error(
+                            VerifyErrorCode::InvalidValueReference,
+                            "array operand count does not match element count",
+                        );
+                    }
+                    for operand in instruction.operands.iter().skip(1) {
+                        self.check_value(Some(*operand), defined_values);
+                    }
+                } else {
+                    self.error(
+                        VerifyErrorCode::InvalidValueReference,
+                        "array instruction missing element count",
+                    );
+                }
                 self.define_value(instruction, defined_values);
             }
             Opcode::LoadLocal => {
@@ -751,6 +807,8 @@ impl Verifier<'_> {
 fn instruction_result_value(instruction: &Instruction, next_value: u32) -> Option<u32> {
     match instruction.opcode {
         Opcode::LoadConst
+        | Opcode::BuildObject
+        | Opcode::BuildArray
         | Opcode::LoadLocal
         | Opcode::LoadMember
         | Opcode::Binary
@@ -844,30 +902,34 @@ fn write_u32(out: &mut Vec<u8>, value: u32) {
 fn opcode_to_u8(opcode: Opcode) -> u8 {
     match opcode {
         Opcode::LoadConst => 0,
-        Opcode::LoadLocal => 1,
-        Opcode::StoreLocal => 2,
-        Opcode::LoadMember => 3,
-        Opcode::StoreMember => 4,
-        Opcode::Binary => 5,
-        Opcode::Call => 6,
-        Opcode::Branch => 7,
-        Opcode::Jump => 8,
-        Opcode::Return => 9,
+        Opcode::BuildObject => 1,
+        Opcode::BuildArray => 2,
+        Opcode::LoadLocal => 3,
+        Opcode::StoreLocal => 4,
+        Opcode::LoadMember => 5,
+        Opcode::StoreMember => 6,
+        Opcode::Binary => 7,
+        Opcode::Call => 8,
+        Opcode::Branch => 9,
+        Opcode::Jump => 10,
+        Opcode::Return => 11,
     }
 }
 
 fn opcode_from_u8(value: u8) -> Option<Opcode> {
     Some(match value {
         0 => Opcode::LoadConst,
-        1 => Opcode::LoadLocal,
-        2 => Opcode::StoreLocal,
-        3 => Opcode::LoadMember,
-        4 => Opcode::StoreMember,
-        5 => Opcode::Binary,
-        6 => Opcode::Call,
-        7 => Opcode::Branch,
-        8 => Opcode::Jump,
-        9 => Opcode::Return,
+        1 => Opcode::BuildObject,
+        2 => Opcode::BuildArray,
+        3 => Opcode::LoadLocal,
+        4 => Opcode::StoreLocal,
+        5 => Opcode::LoadMember,
+        6 => Opcode::StoreMember,
+        7 => Opcode::Binary,
+        8 => Opcode::Call,
+        9 => Opcode::Branch,
+        10 => Opcode::Jump,
+        11 => Opcode::Return,
         _ => return None,
     })
 }
