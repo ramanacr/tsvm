@@ -32,6 +32,19 @@ pub struct ScriptLoaderError {
     pub source: Option<ExecuteError>,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ScriptPolicy {
+    pub allow_typescript: bool,
+}
+
+impl Default for ScriptPolicy {
+    fn default() -> Self {
+        Self {
+            allow_typescript: true,
+        }
+    }
+}
+
 pub fn execute_typescript_scripts(
     document_url: &str,
     html: &str,
@@ -46,6 +59,22 @@ pub fn execute_typescript_scripts_with_host(
     resources: &BTreeMap<String, String>,
     host: &HostEnvironment,
 ) -> Result<BrowserExecution, ScriptLoaderError> {
+    execute_typescript_scripts_with_policy(
+        document_url,
+        html,
+        resources,
+        host,
+        ScriptPolicy::default(),
+    )
+}
+
+pub fn execute_typescript_scripts_with_policy(
+    document_url: &str,
+    html: &str,
+    resources: &BTreeMap<String, String>,
+    host: &HostEnvironment,
+    policy: ScriptPolicy,
+) -> Result<BrowserExecution, ScriptLoaderError> {
     let mut output = BrowserExecution {
         console: Vec::new(),
         scripts: Vec::new(),
@@ -55,6 +84,12 @@ pub fn execute_typescript_scripts_with_host(
     for script in find_scripts(html) {
         if script_type(script.open_tag).as_deref() != Some("text/typescript") {
             continue;
+        }
+        if !policy.allow_typescript {
+            return Err(ScriptLoaderError {
+                message: "TypeScript execution blocked by script policy".into(),
+                source: None,
+            });
         }
 
         if let Some(src) = script_src(script.open_tag) {

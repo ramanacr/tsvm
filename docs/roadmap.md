@@ -20,14 +20,12 @@ embedded in a browser.
 
 ## Near-Term Priorities
 
-- Expand security hardening around verifier bypass attempts, malformed module
-  graphs, cross-origin binding calls, and host capability misuse.
-- Add policy tests for CSP/script loading and origin decisions.
-- Add crash-regression fixtures for parser, bytecode decoder, verifier, module
-  graph, interop, and web bindings.
-- Preserve verifier-first execution before any host capability is invoked.
-- Add coverage-guided fuzzing once the Rust toolchain and CI environment can
-  support `cargo-fuzz`.
+- Add interpreter benchmark fixtures for the initial demo, function calls,
+  object mutation, module loading, interop calls, and DOM/fetch host calls.
+- Add a benchmark runner that reports stable operation counts and elapsed time.
+- Draft JIT research guidance without changing the interpreter-first runtime.
+- Keep W^X, code-signing, and renderer sandbox constraints explicit before any
+  executable-code generation is considered.
 
 ## Long-Term Browser Goal
 

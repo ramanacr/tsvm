@@ -17,7 +17,7 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M11 standalone runtime foundation from
+This repository currently implements the M0-M12 standalone runtime foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -66,6 +66,9 @@ This repository currently implements the M0-M11 standalone runtime foundation fr
   path.
 - DOM/fetch binding model that exposes stateful host document mutation and
   same-origin text fetch through explicit interop host functions.
+- Security hardening tests for verifier-gated execution, script policy
+  blocking, remote module rejection, cross-origin fetch rejection, malformed
+  bytecode crash corpus handling, and no-JavaScript TypeScript execution.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
@@ -97,6 +100,7 @@ web-bindings/             Future console, DOM, fetch, timers, events bindings
   dom-fetch/              Implemented M11 DOM text and fetch host bindings
 interop/                  Future JS/TS value and call boundary
 security/                 Threat model, sandbox, CSP, and origin policy notes
+  hardening/              Implemented M12 executable security regression tests
 tests/fixtures/lexer/     Valid and invalid lexer corpus
 tests/fixtures/parser/    Valid parser corpus
 tests/fixtures/semantic/  Valid and invalid semantic corpus
@@ -107,6 +111,7 @@ tests/fixtures/modules/   Valid and invalid local module corpus
 tests/fixtures/interop/   Valid interop boundary corpus
 tests/fixtures/browser/   Valid script-loader browser fixture corpus
 tests/fixtures/web-bindings/ Valid DOM/fetch binding corpus
+tests/fixtures/security/ Crash and policy regression corpus
 tools/                    Developer tools and corpus runners
 docs/adr/                 Architecture decision records
 ```
@@ -383,7 +388,7 @@ Supported token families:
   delimiter tokens
 - line comments and block comments
 
-Deferred language work now starts in M12 with security hardening.
+Deferred language work now starts in M13 with performance and JIT research.
 
 ## Security Posture
 
@@ -402,8 +407,7 @@ See:
 
 ## Roadmap
 
-The next milestone is M12: security hardening. The longer sequence continues
-with performance research.
+The next milestone is M13: performance and JIT research.
 
 See [`docs/roadmap.md`](docs/roadmap.md) and
 [`docs/milestones.md`](docs/milestones.md).

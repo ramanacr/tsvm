@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
+use tsvm_interop::HostEnvironment;
 use tsvm_interpreter::Value;
-use tsvm_script_loader::{execute_typescript_scripts, ScriptKind};
+use tsvm_script_loader::{
+    execute_typescript_scripts, execute_typescript_scripts_with_policy, ScriptKind, ScriptPolicy,
+};
 
 #[test]
 fn executes_text_typescript_src_through_tsvm() {
@@ -75,4 +78,20 @@ fn reports_missing_typescript_src_resource() {
     .expect_err("missing script should fail");
 
     assert!(err.message.contains("/missing.ts"));
+}
+
+#[test]
+fn script_policy_can_block_typescript_execution() {
+    let err = execute_typescript_scripts_with_policy(
+        "/index.html",
+        r#"<script type="text/typescript">console.log(42);</script>"#,
+        &BTreeMap::new(),
+        &HostEnvironment::new(),
+        ScriptPolicy {
+            allow_typescript: false,
+        },
+    )
+    .expect_err("policy should block TypeScript");
+
+    assert!(err.message.contains("blocked"));
 }

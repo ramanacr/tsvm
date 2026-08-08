@@ -204,7 +204,29 @@ Deferred from M11:
   service integration, and CSP-enforced resource loading are deferred to
   security hardening and browser integration work.
 
-## M12-M13
+## M12: Security Hardening
+
+Status: implemented for standalone runtime boundaries.
+
+Acceptance evidence:
+
+- `security/hardening` runs executable security regression tests in the Cargo
+  workspace.
+- Interpreter execution is still gated by bytecode verification.
+- Script policy can block TypeScript before compilation.
+- Remote module specifiers are rejected by the module graph.
+- Cross-origin fetch calls are rejected before response data enters TSVM.
+- Malformed bytecode crash corpus inputs decode as errors.
+- The TypeScript script-loader path continues to expose a no-generated-JS
+  invariant.
+
+Deferred from M12:
+
+- Coverage-guided fuzzing, sanitizer builds, real renderer sandbox tests, CSP
+  integration with Chromium, and crash corpus minimization are deferred until
+  the browser integration environment exists.
+
+## M13
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.

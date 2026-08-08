@@ -12,6 +12,7 @@ members = [
     "runtime/interop",
     "browser/script-loader",
     "web-bindings/dom-fetch",
+    "security/hardening",
 ]
 resolver = "2"
 

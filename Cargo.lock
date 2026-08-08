@@ -75,6 +75,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsvm-security-hardening"
+version = "0.1.0"
+dependencies = [
+ "tsvm-bytecode",
+ "tsvm-interop",
+ "tsvm-interpreter",
+ "tsvm-modules",
+ "tsvm-script-loader",
+ "tsvm-web-bindings",
+]
+
+[[package]]
 name = "tsvm-semantic"
 version = "0.1.0"
 dependencies = [
