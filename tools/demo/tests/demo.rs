@@ -14,7 +14,10 @@ fn demo_output_shows_the_runtime_in_action() {
     assert!(output.contains("DOM #app after fetch: hello from TSVM"));
     assert!(output.contains("Cross-origin fetch: blocked"));
     assert!(output.contains("Benchmark snapshot"));
-    assert!(output.contains("initial-demo"));
-    assert!(output.contains("function-calls"));
-    assert!(output.contains("object-mutation"));
+    assert!(output.contains("name,mode,iterations,median_elapsed_micros,console_values"));
+    assert!(output.contains("page-startup,cold"));
+    assert!(output.contains("prepared-page-entry,warm-entry"));
+    assert!(output.contains("prepared-handler-dispatch,warm-handler"));
+    assert!(output.contains("dom-binding-update,warm-entry"));
+    assert!(output.contains("same-origin-fetch-update,warm-entry"));
 }

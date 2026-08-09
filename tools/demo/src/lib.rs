@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use tsvm_benchmarks::run_default_benchmarks;
+use tsvm_benchmarks::{csv_header, run_default_benchmarks};
 use tsvm_interpreter::{execute_source, Value};
 use tsvm_script_loader::execute_typescript_scripts;
 use tsvm_web_bindings::{BrowserBindings, Document, FetchService};
@@ -144,15 +144,11 @@ console.log(fetchText("https://evil.test/message.txt"));
 
 fn render_benchmarks(out: &mut String) {
     out.push_str("Benchmark snapshot:\n");
-    out.push_str("name,iterations,elapsed_micros,console_values\n");
-    for result in run_default_benchmarks(3) {
-        out.push_str(&format!(
-            "{},{},{},{}\n",
-            result.name,
-            result.iterations,
-            result.elapsed.as_micros(),
-            result.console_values
-        ));
+    out.push_str(csv_header());
+    out.push('\n');
+    for result in run_default_benchmarks(3).expect("benchmark snapshot should execute") {
+        out.push_str(&result.csv_row());
+        out.push('\n');
     }
 }
 
