@@ -27,7 +27,7 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-      - name: C++ renderer bridge syntax
+      - name: C++ renderer bridge and page-session smoke syntax
         run: >-
           c++ -std=c++20 -fsyntax-only
           browser/chromium/tsvm_renderer_bridge.cc
