@@ -271,3 +271,35 @@ Deferred from M14:
 - Chromium checkout linkage, Blink script dispatch, renderer sandbox tests,
   DevTools, V8 interop, and browser-owned DOM/fetch capability bindings remain
   real browser-integration milestones.
+
+## M15: Browser-Workload Performance
+
+Status: implemented for standalone prepared execution and browser-style
+workload measurement.
+
+Acceptance evidence:
+
+- `PreparedModule` owns private verified bytecode and can execute the verified
+  entry program repeatedly with a fresh interpreter and heap for each run.
+- One-shot source execution shares the prepared module's compile-and-verify
+  contract.
+- `tools/benchmarks` separates cold source execution, warm prepared entry
+  execution, and warm host-to-TS handler dispatch.
+- Browser-style benchmark fixtures exercise explicit DOM text bindings and
+  same-origin text fetch without adding an event loop or a browser network
+  stack.
+- Each benchmark iteration validates console output, handler results, or
+  host-visible document text before timing is accepted.
+- The runner performs one warm-up and five timed samples, reports a median CSV
+  row, and exits nonzero on a failed expectation.
+- `docs/benchmark-results.md` contains the M15 release-profile baseline with
+  command, processor, operating system, Rust version, sample count, and raw
+  rows.
+
+Deferred from M15:
+
+- Profiling-led interpreter dispatch, object-layout, and host-binding
+  optimizations.
+- Real Chromium renderer page sessions over the M14 C ABI bridge.
+- Browser events, timers, promises, async fetch, and a full DOM.
+- Cross-engine comparisons or claims about outperforming browser renderers.

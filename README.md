@@ -17,8 +17,8 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository implements the M0-M13 standalone runtime foundation and the M14
-native bridge foundation from
+This repository implements the M0-M13 standalone runtime foundation, the M14
+native bridge foundation, and the M15 browser-workload performance baseline from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -74,9 +74,9 @@ native bridge foundation from
 - Security hardening tests for verifier-gated execution, script policy
   blocking, remote module rejection, cross-origin fetch rejection, malformed
   bytecode crash corpus handling, and no-JavaScript TypeScript execution.
-- Interpreter benchmark runner for core runtime paths plus documented JIT
-  research constraints around W^X, code signing, verifier gating, sandboxing,
-  and deterministic interpreter fallback.
+- Browser-workload benchmark runner with cold source execution, warm prepared
+  entry execution, warm handler dispatch, deterministic DOM/fetch host
+  fixtures, five-sample median reporting, and published release results.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
@@ -265,6 +265,22 @@ assert_eq!(output.console, vec![Value::Number(42.0)]);
 The interpreter only executes modules that pass bytecode verification. Invalid
 source returns semantic diagnostics before bytecode execution; malformed modules
 return verifier errors before runtime state is created.
+
+For a page-style lifecycle that retains verified bytecode while giving each run
+fresh runtime state:
+
+```rust
+use tsvm_interpreter::{PreparedModule, Value};
+
+let page = PreparedModule::from_source("console.log(40 + 2);")?;
+let output = page.execute()?;
+assert_eq!(output.console, vec![Value::Number(42.0)]);
+```
+
+See [`docs/performance.md`](docs/performance.md) for cold and warm lifecycle
+definitions, and [`docs/benchmark-results.md`](docs/benchmark-results.md) for
+the checked-in M15 baseline. These are standalone TSVM measurements, not a
+real-Chromium or cross-engine performance claim.
 
 ## Heap API
 

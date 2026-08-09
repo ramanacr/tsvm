@@ -22,6 +22,7 @@ embedded in a browser.
 | M12 security hardening | Standalone boundary tests done | Verifier-gate, script-policy, remote-module, cross-origin fetch, malformed-bytecode, and no-generated-JS regression tests are implemented. | Coverage-guided fuzzing, sanitizers, real renderer sandbox tests, CSP integration, and crash corpus minimization remain deferred. |
 | M13 performance and JIT research | Baseline done | Interpreter benchmark runner, checked-in benchmark results, performance docs, and JIT constraints are implemented. | Real profiling, trend storage, optimizer passes, and JIT prototypes remain deferred until the browser boundary matures. |
 | M14 Chromium bridge foundation | Done | Stable Rust C ABI, opaque result ownership, panic containment, deterministic tagged output, C++20 renderer adapter, and C++ syntax CI coverage are implemented. | A Chromium checkout must link the static library and add the real Blink `text/typescript` dispatch hook after script policy checks. |
+| M15 browser-workload performance | Done | Prepared verified entry execution, browser-style cold/warm benchmark modes, deterministic DOM/fetch fixtures, median result reporting, and a checked-in release baseline are implemented. | Profiling-led interpreter optimization, real Chromium page sessions, events, timers, async fetch, and fair cross-engine comparisons remain deferred. |
 
 ## Current Summary
 
@@ -44,7 +45,8 @@ integration: Chromium renderer embedding, Blink/V8 boundary work,
 browser-native CSP/origin enforcement, broader language coverage, production
 fuzzing/sanitizers, and longer-term performance research. M14 establishes the
 native Rust/C++ call boundary required for that work without claiming a browser
-embed exists yet.
+embed exists yet. M15 establishes a standalone browser-workload measurement
+baseline without claiming a Chromium or cross-engine result.
 
 ## Near-Term Priorities
 
@@ -58,6 +60,8 @@ embed exists yet.
   dependency audits.
 - Keep the interpreter baseline authoritative before any JIT research branch is
   allowed to execute generated code.
+- Use profiler evidence from the M15 warm workloads before changing interpreter
+  dispatch, object layout, or host-binding lookup behavior.
 
 ## Long-Term Browser Goal
 
