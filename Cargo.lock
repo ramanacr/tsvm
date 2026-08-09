@@ -26,6 +26,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "tsvm-c-api"
+version = "0.1.0"
+dependencies = [
+ "tsvm-interpreter",
+]
+
+[[package]]
 name = "tsvm-demo"
 version = "0.1.0"
 dependencies = [

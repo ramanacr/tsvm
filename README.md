@@ -17,7 +17,8 @@ and browser capability boundary.
 
 ## Current Status
 
-This repository currently implements the M0-M13 standalone runtime foundation from
+This repository implements the M0-M13 standalone runtime foundation and the M14
+native bridge foundation from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -59,6 +60,10 @@ This repository currently implements the M0-M13 standalone runtime foundation fr
 - JS/TS interop boundary model for standalone host integration: explicit
   `InteropValue` conversion, registered host functions callable from TSVM, host
   calls into prepared TS functions, and boundary error propagation.
+- Stable C ABI foundation for a future Chromium renderer embed: length-delimited
+  UTF-8 TypeScript execution, opaque Rust-owned results, deterministic tagged
+  JSON output, panic containment, and a C++20 renderer adapter that preserves
+  the no-generated-JavaScript invariant.
 - Minimal browser script-loader model that recognizes
   `<script type="text/typescript">`, resolves local `.ts` script resources,
   executes external and inline TypeScript through TSVM, ignores normal
@@ -99,6 +104,7 @@ runtime/                  TypeScript-native compiler and VM components
   heap/                   Implemented M7 managed heap and tracing collector
   modules/                Implemented M8 local module graph resolver
   interop/                Implemented M9 standalone host interop values
+  c-api/                  Implemented native C ABI renderer bridge foundation
 web-bindings/             Future console, DOM, fetch, timers, events bindings
   dom-fetch/              Implemented M11 DOM text and fetch host bindings
 interop/                  Future JS/TS value and call boundary
@@ -142,6 +148,7 @@ cargo test --workspace
 cargo run -p tsvm-lexer --bin lexer_corpus_runner -- tests/fixtures/lexer
 cargo run -p tsvm-demo
 cargo run -p tsvm-benchmarks -- 100
+cargo test -p tsvm-c-api --test c_api
 ```
 
 ## Releases
@@ -370,6 +377,17 @@ M10 recognizes `text/typescript` scripts and executes only those entries through
 the TSVM pipeline. External `.ts` scripts can use the M8 module graph resolver;
 inline TypeScript is compiled directly. Normal JavaScript script tags are left
 alone for a future browser/V8 integration path.
+
+## Native C ABI
+
+The renderer bridge begins with a stable C ABI that accepts UTF-8 TypeScript,
+executes it directly through TSVM, and returns a Rust-owned deterministic JSON
+result. The result records `generated_javascript: false`; C++ callers copy it
+through the lightweight `browser/chromium` wrapper before releasing the opaque
+handle.
+
+See [`docs/c-api.md`](docs/c-api.md) for the ownership contract, status codes,
+build artifacts, and C++ usage.
 
 ## DOM And Fetch Binding API
 

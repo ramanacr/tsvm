@@ -21,6 +21,7 @@ embedded in a browser.
 | M11 DOM and fetch | Standalone model done | Host document text mutation, host document reads, same-origin text fetch, cross-origin blocking, and interop-bound binding calls are implemented. | Full DOM, events, timers, async fetch/promises, CSP-backed fetch/script loading, and browser network integration remain deferred. |
 | M12 security hardening | Standalone boundary tests done | Verifier-gate, script-policy, remote-module, cross-origin fetch, malformed-bytecode, and no-generated-JS regression tests are implemented. | Coverage-guided fuzzing, sanitizers, real renderer sandbox tests, CSP integration, and crash corpus minimization remain deferred. |
 | M13 performance and JIT research | Baseline done | Interpreter benchmark runner, checked-in benchmark results, performance docs, and JIT constraints are implemented. | Real profiling, trend storage, optimizer passes, and JIT prototypes remain deferred until the browser boundary matures. |
+| M14 Chromium bridge foundation | Done | Stable Rust C ABI, opaque result ownership, panic containment, deterministic tagged output, C++20 renderer adapter, and C++ syntax CI coverage are implemented. | A Chromium checkout must link the static library and add the real Blink `text/typescript` dispatch hook after script policy checks. |
 
 ## Current Summary
 
@@ -38,14 +39,17 @@ cargo +stable-x86_64-pc-windows-gnu run -p tsvm-demo
 - DOM mutation and same-origin fetch work through explicit host bindings.
 - Cross-origin fetch is blocked.
 
-The largest remaining work is not another standalone milestone. It is turning
-the standalone models into real browser integration: Chromium renderer embedding,
-Blink/V8 boundary work, browser-native CSP/origin enforcement, broader language
-coverage, production fuzzing/sanitizers, and longer-term performance research.
+The largest remaining work is turning the standalone models into real browser
+integration: Chromium renderer embedding, Blink/V8 boundary work,
+browser-native CSP/origin enforcement, broader language coverage, production
+fuzzing/sanitizers, and longer-term performance research. M14 establishes the
+native Rust/C++ call boundary required for that work without claiming a browser
+embed exists yet.
 
 ## Near-Term Priorities
 
-- Deepen Chromium renderer integration from the standalone script-loader model.
+- Obtain a Chromium checkout and use the M14 bridge from a Blink
+  `text/typescript` dispatch hook after normal script policy checks.
 - Replace host-function TypeScript stubs with ambient declarations for DOM,
   fetch, and interop APIs.
 - Expand language support toward exceptions, classes, loops, async, and richer

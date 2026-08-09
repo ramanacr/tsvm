@@ -27,6 +27,13 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+      - name: C++ renderer bridge syntax
+        run: >-
+          c++ -std=c++20 -fsyntax-only
+          browser/chromium/tsvm_renderer_bridge.cc
+          browser/chromium/renderer_bridge_smoke.cc
+          -Ibrowser/chromium -Iruntime/c-api/include
+
       - name: Lexer corpus smoke
         run: cargo run -p tsvm-lexer --bin lexer_corpus_runner -- tests/fixtures/lexer
 
@@ -44,6 +51,7 @@ jobs:
           test -f docs/architecture.md
           test -f docs/roadmap.md
           test -f docs/milestones.md
+          test -f docs/c-api.md
           test -f security/threat-model.md
           test -f security/sandbox.md
           test -f security/csp.md
@@ -54,4 +62,7 @@ jobs:
         shell: bash
         run: |
           grep -R "TypeScript -> Typed AST -> Semantic Analysis -> Typed IR -> Verified Bytecode -> TSVM" README.md docs security
+          grep -F "tsvm_execute_utf8" docs/c-api.md
+          grep -F "tsvm_result_free" docs/c-api.md
+          grep -F "generated_javascript" docs/c-api.md
 

@@ -101,6 +101,21 @@ privileged browser process. DOM, fetch, console, timers, storage, and interop
 must be exposed through capability-checked bindings that obey the browser's
 same-origin policy, CSP, site isolation, and sandbox rules.
 
+## Chromium C ABI Bridge
+
+`runtime/c-api` gives Chromium-side C++ a stable native boundary without
+introducing a JavaScript representation. The safe Rust core accepts UTF-8,
+executes the existing interpreter pipeline, maps errors into ABI status values,
+and emits deterministic tagged JSON. A thin FFI adapter contains the only raw
+pointer conversions and catches panics before they can cross into C++.
+
+`browser/chromium/tsvm_renderer_bridge` copies the result payload before freeing
+its opaque Rust handle. It does not expose V8 values, DOM wrappers, network
+objects, filesystem access, or browser IPC. The future Blink hook remains
+responsible for CSP, origin, script policy, and renderer-process ownership.
+
+See [`c-api.md`](c-api.md) for the public ownership and versioning contract.
+
 ## No JavaScript Fallback
 
 The TypeScript execution path must never emit JavaScript as an intermediate or

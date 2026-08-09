@@ -10,6 +10,7 @@ members = [
     "runtime/heap",
     "runtime/modules",
     "runtime/interop",
+    "runtime/c-api",
     "browser/script-loader",
     "web-bindings/dom-fetch",
     "security/hardening",

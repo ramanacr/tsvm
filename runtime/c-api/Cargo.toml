@@ -1,0 +1,23 @@
+[package]
+name = "tsvm-c-api"
+version = "0.1.0"
+description = "C ABI bridge for the TypeScript-native browser runtime"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tsvm-interpreter = { path = "../interpreter" }
+
+[lib]
+name = "tsvm_c_api"
+path = "src/lib.rs"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = "deny"

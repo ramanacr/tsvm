@@ -249,3 +249,25 @@ Deferred from M13:
 
 See [`roadmap.md`](roadmap.md) for the full sequence from semantic analysis
 through Chromium integration, browser bindings, hardening, and JIT research.
+
+## M14: Chromium Bridge Foundation
+
+Status: implemented.
+
+Acceptance evidence:
+
+- `runtime/c-api` exposes a versioned C ABI for length-delimited UTF-8
+  TypeScript source.
+- The ABI executes through the verified TSVM pipeline and records
+  `generated_javascript: false` in its deterministic result envelope.
+- Result allocation, borrowing, and release are owned by Rust through an opaque
+  `tsvm_result` handle; panics are contained before crossing the C++ boundary.
+- `browser/chromium/tsvm_renderer_bridge` provides a C++20 RAII adapter that
+  copies result bytes before freeing the Rust handle.
+- Rust ABI tests and a CI C++ syntax check cover the public boundary.
+
+Deferred from M14:
+
+- Chromium checkout linkage, Blink script dispatch, renderer sandbox tests,
+  DevTools, V8 interop, and browser-owned DOM/fetch capability bindings remain
+  real browser-integration milestones.
