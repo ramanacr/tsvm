@@ -332,3 +332,36 @@ Deferred from M16:
   cache partitioning, and disk-backed artifacts.
 - Browser events, timers, promises, asynchronous fetch, and a full DOM.
 - Cross-engine comparisons or claims about outperforming browser renderers.
+
+## M17: Persistent Page-Session C ABI
+
+Status: implemented for the native inline-source bridge.
+
+Acceptance evidence:
+
+- `runtime/c-api` advances the stable ABI to version 2 while preserving the
+  version-1 one-shot functions and opaque result ownership contract.
+- Opaque Rust-owned page sessions accept only nonzero cache capacities, execute
+  direct length-delimited UTF-8 inline TypeScript, and are released with a
+  null-safe dedicated free function.
+- Every execution maps the current policy before `PageScriptSession` performs
+  cache lookup; blocked calls produce owned runtime-error results without
+  mutating cache counters.
+- Cache statistics cross the ABI as copied value fields, and every successful
+  call uses a fresh empty host plus a fresh TSVM runtime and heap even on a
+  preparation hit.
+- The C++20 `PageSession` wrapper is move-only, releases the Rust handle with
+  RAII, copies temporary result bytes, and its linked MSVC smoke proves one
+  miss, one hit, and unchanged stats after policy blocking.
+- M17 publishes no wall-clock benchmark because it extends ownership and API
+  evidence rather than the standalone M16 benchmarked workload.
+
+Deferred from M17:
+
+- Chromium checkout linkage, Blink `text/typescript` dispatch, browser
+  resource loading, CSP, site isolation, and renderer sandbox validation.
+- URL/origin cache identity, partitioning, invalidation, navigation lifetime,
+  browser network cache integration, and disk-backed artifacts.
+- Browser DOM/fetch capability bindings, events, timers, promises, async
+  fetch, and a full browser event loop.
+- Cross-engine comparisons or claims about outperforming browser renderers.

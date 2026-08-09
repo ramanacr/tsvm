@@ -24,6 +24,7 @@ embedded in a browser.
 | M14 Chromium bridge foundation | Done | Stable Rust C ABI, opaque result ownership, panic containment, deterministic tagged output, C++20 renderer adapter, and C++ syntax CI coverage are implemented. | A Chromium checkout must link the static library and add the real Blink `text/typescript` dispatch hook after script policy checks. |
 | M15 browser-workload performance | Done | Prepared verified entry execution, browser-style cold/warm benchmark modes, deterministic DOM/fetch fixtures, median result reporting, and a checked-in release baseline are implemented. | Profiling-led interpreter optimization, real Chromium page sessions, events, timers, async fetch, and fair cross-engine comparisons remain deferred. |
 | M16 browser script preparation cache | Done | Bounded FIFO verified-module cache, page-owned script sessions, policy-before-lookup enforcement, exact-source cache counters, cached-page benchmark mode, and a checked-in release result are implemented. | Real Chromium page ownership, browser cache invalidation/partitioning, events, timers, promises, async fetch, and fair cross-engine comparisons remain deferred. |
+| M17 persistent page-session C ABI | Done | ABI v2 provides opaque bounded page-session ownership, direct inline policy-aware execution, copied cache stats, and a move-only C++20 RAII smoke proof. | Blink dispatch, browser resource loading/CSP/site-isolation checks, origin cache identity/partitioning, invalidation, DOM/fetch bindings, and browser lifecycle integration remain deferred. |
 
 ## Current Summary
 
@@ -50,14 +51,16 @@ embed exists yet. M15 establishes a standalone browser-workload measurement
 baseline without claiming a Chromium or cross-engine result. M16 builds on it
 with a bounded page-session preparation cache that retains verified modules
 only; every cached execution still receives a fresh TSVM runtime and its
-caller's host.
+caller's host. M17 carries that standalone model across the native boundary
+with one opaque page-session handle, but it remains an inline-source bridge
+rather than a Chromium renderer integration.
 
 ## Near-Term Priorities
 
-- Obtain a Chromium checkout and use the M14 bridge from a Blink
-  `text/typescript` dispatch hook after normal script policy checks.
+- Obtain a Chromium checkout and connect the M17 page-session bridge to a Blink
+  `text/typescript` dispatch hook after normal browser policy checks.
 - Design browser-owned cache invalidation, origin partitioning, and resource
-  identity rules before extending M16's exact-source standalone cache into a
+  identity rules before extending M17's exact-source inline cache into a
   Chromium renderer.
 - Replace host-function TypeScript stubs with ambient declarations for DOM,
   fetch, and interop APIs.

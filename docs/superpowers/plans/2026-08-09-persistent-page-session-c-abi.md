@@ -49,7 +49,7 @@
 - Consumes: `tsvm_script_loader::PageScriptSession`, `tsvm_script_loader::ScriptPolicy`, `tsvm_interop::HostEnvironment`, and `tsvm_interpreter::{ExecuteError, ExecutionOutput}`.
 - Produces: `TSVM_ABI_VERSION == 2`, opaque `TsvmPageSession`, `CacheStats`, `tsvm_page_session_create`, `tsvm_page_session_execute_utf8`, `tsvm_page_session_cache_stats`, and `tsvm_page_session_free`.
 
-- [ ] **Step 1: Add failing exported-ABI integration tests**
+- [x] **Step 1: Add failing exported-ABI integration tests**
 
 Extend the test imports and add these tests to `runtime/c-api/tests/c_api.rs`. Keep the tests at the ABI level: they must call exported functions and release every non-null result/session.
 
@@ -115,7 +115,7 @@ fn blocked_page_session_call_does_not_mutate_cache_stats() {
 
 Add focused tests for zero capacity and null creation output; null session, null result output, non-empty null source, unknown raw policy integer, invalid UTF-8, compile error, and null stats input/output. Assert that result output stays null for invalid-argument cases, but invalid UTF-8, compile error, and policy blocking produce owned error results. Update the version assertion to `2`, and retain the existing legacy one-shot test unchanged.
 
-- [ ] **Step 2: Run the new C ABI tests to verify they fail**
+- [x] **Step 2: Run the new C ABI tests to verify they fail**
 
 Run:
 
@@ -126,7 +126,7 @@ $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Commo
 
 Expected: compilation fails because the session symbols, C cache-stat type, and policy constants do not exist yet.
 
-- [ ] **Step 3: Define the v2 C header and Rust ABI values**
+- [x] **Step 3: Define the v2 C header and Rust ABI values**
 
 In `runtime/c-api/include/tsvm_c_api.h`, include `<stddef.h>`, add the opaque `tsvm_page_session`, the exact `tsvm_script_policy` constants, `tsvm_cache_stats`, and these declarations after the legacy functions:
 
@@ -160,7 +160,7 @@ fn script_policy_from_raw(policy: c_int) -> Result<ScriptPolicy, Status> {
 
 This preserves the C header's convenient enum while ensuring an unknown value arriving from C cannot become an invalid Rust enum discriminant.
 
-- [ ] **Step 4: Implement opaque lifecycle, execution, panic containment, and copied stats**
+- [x] **Step 4: Implement opaque lifecycle, execution, panic containment, and copied stats**
 
 Add direct `tsvm-script-loader` and `tsvm-interop` dependencies. Store the page-owned cache only in this Rust allocation:
 
@@ -186,7 +186,7 @@ Map `ScriptLoaderError { source: Some(error), .. }` through the existing `Execut
 
 For stats, validate both pointers before dereference, copy `hits`, `misses`, `evictions`, and `entries` from `page.session.cache_stats()` into `CacheStats`, and catch panics as `Status::InternalError`. Free accepts null and drops a live `Box<TsvmPageSession>` exactly once. Keep legacy ABI code and its ownership rules unchanged.
 
-- [ ] **Step 5: Run focused and workspace Rust verification**
+- [x] **Step 5: Run focused and workspace Rust verification**
 
 Run:
 
@@ -197,7 +197,7 @@ $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Commo
 
 Expected: all focused checks pass, including a legacy one-shot execution, a cache miss then hit, no counter mutation for blocked policy, and each pointer/UTF-8 contract.
 
-- [ ] **Step 6: Commit and publish the ABI core milestone**
+- [x] **Step 6: Commit and publish the ABI core milestone**
 
 ```powershell
 git add runtime/c-api/Cargo.toml runtime/c-api/include/tsvm_c_api.h runtime/c-api/src/lib.rs runtime/c-api/tests/c_api.rs
@@ -219,13 +219,13 @@ Expected: the focused, independently testable ABI milestone is committed and syn
 - Consumes: all Task 1 C functions and types, especially `tsvm_page_session*`, `tsvm_script_policy`, `tsvm_cache_stats`, and `tsvm_result`.
 - Produces: `tsvm::chromium::PageSession`, `PageSessionCreation`, `PageSessionCacheStats`, and a smoke executable that runs through the real static Rust library.
 
-- [ ] **Step 1: Expand the smoke test first**
+- [x] **Step 1: Expand the smoke test first**
 
 Replace the one-shot-only check in `browser/chromium/renderer_bridge_smoke.cc` with a session lifecycle proof:
 
 ```cpp
 int main() {
-  const auto created = tsvm::chromium::PageSession::Create(1);
+  auto created = tsvm::chromium::PageSession::Create(1);
   if (created.status != TSVM_STATUS_OK || !created.session.is_valid()) return 1;
 
   auto session = std::move(created.session);
@@ -252,7 +252,7 @@ int main() {
 
 Include `<utility>` for the explicit move. The source exists only during `ExecuteInline`; the wrapper must not retain it.
 
-- [ ] **Step 2: Run the C++ syntax check to verify it fails**
+- [x] **Step 2: Run the C++ syntax check to verify it fails**
 
 Run:
 
@@ -263,7 +263,7 @@ $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Commo
 
 Expected: compilation fails because `PageSession`, creation, inline execution, and cache stats are not in the C++ adapter yet.
 
-- [ ] **Step 3: Define the C++ ownership API and implement it**
+- [x] **Step 3: Define the C++ ownership API and implement it**
 
 In the header, retain `ExecutionResult` and `ExecuteSource`. Add a copied stats value and a creation return value:
 
@@ -305,11 +305,11 @@ Order the declarations so `PageSessionCreation` is forward-declared before the c
 
 Do not add exceptions, source retention, or a fake success value for an invalid page-session handle. For an invalid wrapper, `ExecuteInline` returns `{TSVM_STATUS_INVALID_ARGUMENT, {}}` and `CacheStats` returns `{TSVM_STATUS_INVALID_ARGUMENT, 0, 0, 0, 0}` without calling Rust.
 
-- [ ] **Step 4: Make CI validate the expanded C++ interface**
+- [x] **Step 4: Make CI validate the expanded C++ interface**
 
 Keep the existing Ubuntu `c++ -std=c++20 -fsyntax-only` step and update only its display name to `C++ renderer bridge syntax and page-session smoke`. The command already compiles both bridge sources against the public header, so it validates the new declarations without pretending to link a Linux Rust static library. The Windows link-and-run command remains documented and executed locally as the authoritative executable proof.
 
-- [ ] **Step 5: Build, link, and execute the C++ smoke against the Rust static library**
+- [x] **Step 5: Build, link, and execute the C++ smoke against the Rust static library**
 
 Run:
 
@@ -320,7 +320,7 @@ $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Commo
 
 Expected: exit code `0`; it proves the real C++ wrapper observes one cache miss, one hit, then a blocked request that leaves those counters unchanged. Remove only the two root-level `tsvm_renderer_bridge.obj` and `renderer_bridge_smoke.obj` build by-products after verifying their resolved paths remain inside the repository.
 
-- [ ] **Step 6: Commit and publish the C++ bridge milestone**
+- [x] **Step 6: Commit and publish the C++ bridge milestone**
 
 ```powershell
 git add browser/chromium/tsvm_renderer_bridge.h browser/chromium/tsvm_renderer_bridge.cc browser/chromium/renderer_bridge_smoke.cc .github/workflows/ci.yml
@@ -343,7 +343,7 @@ Expected: the C++20 ownership adapter and executable proof are committed and syn
 - Consumes: Task 1 v2 ABI and Task 2 C++ API.
 - Produces: Accurate user-facing ownership/usage guidance and M17 roadmap evidence with no unsupported browser or performance claims.
 
-- [ ] **Step 1: Update public C ABI documentation with a usable v2 lifecycle**
+- [x] **Step 1: Update public C ABI documentation with a usable v2 lifecycle**
 
 In `docs/c-api.md`, retain the legacy one-shot example and add a C++ example using the actual wrapper API:
 
@@ -359,7 +359,7 @@ const auto cache = session.CacheStats();
 
 Document `PageSession` as move-only, thread/sequence-exclusive, and responsible for one page-owned preparation cache. State exactly that repeated equal inline source can reuse verified preparation but every execution receives a fresh TSVM runtime and empty host. List all pointer, UTF-8, policy, error-result, null-free, and result/session release rules. Show the actual MSVC build/link/run smoke command and say it is an integration proof for the narrow bridge, not a Chromium build.
 
-- [ ] **Step 2: Update README, roadmap, milestones, and ADR status**
+- [x] **Step 2: Update README, roadmap, milestones, and ADR status**
 
 Update `README.md` current status and Native C ABI section to say M17 is implemented: the native boundary now includes opaque page sessions, direct inline source only, policy-first cache access, copied stats, fresh per-execution runtime/host, and C++20 RAII. Link to `docs/c-api.md` and reiterate that real Chromium/Blink dispatch remains future work.
 
@@ -369,7 +369,7 @@ Append an M17 section to `docs/milestones.md` with acceptance evidence: legacy A
 
 Update `docs/adr/ADR-0003-rust-cpp-boundary.md` consequences with the v2 opaque session ownership rules: Rust owns allocation/panic containment, C++ uses move-only RAII, C++ copies borrowed result data before release, and future browser policy/resource checks stay outside this narrow source-only ABI.
 
-- [ ] **Step 3: Run documentation and full runtime verification**
+- [x] **Step 3: Run documentation and full runtime verification**
 
 Run:
 
@@ -380,7 +380,7 @@ $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Commo
 
 Then run the Task 2 MSVC link-and-execute command again. Expected: format, lint, all workspace tests, lexer corpus, and the real C++ smoke pass. Do not rerun or alter the M16 release benchmark: M17 changes the embedding API rather than the benchmarked standalone workload.
 
-- [ ] **Step 4: Commit and publish the documentation milestone**
+- [x] **Step 4: Commit and publish the documentation milestone**
 
 ```powershell
 git add README.md docs/c-api.md docs/roadmap.md docs/milestones.md docs/adr/ADR-0003-rust-cpp-boundary.md

@@ -19,7 +19,8 @@ and browser capability boundary.
 
 This repository implements the M0-M13 standalone runtime foundation, the M14
 native bridge foundation, the M15 browser-workload performance baseline, and
-the M16 standalone page-session preparation cache from
+the M16 standalone page-session preparation cache, and the M17 persistent
+page-session C ABI from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -61,10 +62,11 @@ the M16 standalone page-session preparation cache from
 - JS/TS interop boundary model for standalone host integration: explicit
   `InteropValue` conversion, registered host functions callable from TSVM, host
   calls into prepared TS functions, and boundary error propagation.
-- Stable C ABI foundation for a future Chromium renderer embed: length-delimited
-  UTF-8 TypeScript execution, opaque Rust-owned results, deterministic tagged
-  JSON output, panic containment, and a C++20 renderer adapter that preserves
-  the no-generated-JavaScript invariant.
+- Versioned native C ABI for a future Chromium renderer embed: legacy one-shot
+  execution plus opaque, bounded page sessions for direct inline TypeScript,
+  policy-first cache access, copied cache counters, panic containment, and a
+  move-only C++20 RAII adapter that preserves the no-generated-JavaScript
+  invariant.
 - Minimal browser script-loader model that recognizes
   `<script type="text/typescript">`, resolves local `.ts` script resources,
   executes external and inline TypeScript through TSVM, ignores normal
@@ -419,11 +421,17 @@ alone for a future browser/V8 integration path.
 
 ## Native C ABI
 
-The renderer bridge begins with a stable C ABI that accepts UTF-8 TypeScript,
-executes it directly through TSVM, and returns a Rust-owned deterministic JSON
-result. The result records `generated_javascript: false`; C++ callers copy it
-through the lightweight `browser/chromium` wrapper before releasing the opaque
-handle.
+The version-2 renderer bridge accepts UTF-8 TypeScript directly through TSVM.
+It retains the one-shot API and adds opaque page sessions that cache verified
+preparation for repeated identical inline source. Policy is checked on every
+call before cache lookup; a cache hit still receives a fresh TSVM runtime and
+an empty host environment. Results remain Rust-owned deterministic JSON with
+`generated_javascript: false`; the C++ wrapper copies result bytes before
+releasing their opaque handle.
+
+This is a narrow renderer-side foundation, not Chromium/Blink integration: it
+does not load external scripts, expose DOM/fetch, retain host capabilities, or
+implement browser cache partitioning and invalidation.
 
 See [`docs/c-api.md`](docs/c-api.md) for the ownership contract, status codes,
 build artifacts, and C++ usage.

@@ -21,7 +21,8 @@ cargo build -p tsvm-c-api
 
 The public C header is
 [`runtime/c-api/include/tsvm_c_api.h`](../runtime/c-api/include/tsvm_c_api.h).
-The ABI version is `1`.
+The ABI version is `2`. Version 2 retains the version-1 one-shot entry point
+and adds opaque, page-owned session handles for repeated inline source.
 
 ## API
 
@@ -32,6 +33,18 @@ tsvm_status tsvm_execute_utf8(const unsigned char* source,
 const unsigned char* tsvm_result_json(const tsvm_result* result,
                                       size_t* out_len);
 void tsvm_result_free(tsvm_result* result);
+tsvm_status tsvm_page_session_create(size_t cache_capacity,
+                                     tsvm_page_session** out_session);
+tsvm_status tsvm_page_session_execute_utf8(
+    tsvm_page_session* session,
+    const unsigned char* source,
+    size_t source_len,
+    tsvm_script_policy policy,
+    tsvm_result** out_result);
+tsvm_status tsvm_page_session_cache_stats(
+    const tsvm_page_session* session,
+    tsvm_cache_stats* out_stats);
+void tsvm_page_session_free(tsvm_page_session* session);
 uint32_t tsvm_abi_version(void);
 ```
 
@@ -49,6 +62,51 @@ result must be released exactly once with `tsvm_result_free`.
 Passing an arbitrary result pointer or freeing one twice violates the C API
 contract. This is the usual opaque-handle rule and avoids cross-allocator
 ownership between C++ and Rust.
+
+## Page Sessions
+
+`tsvm_page_session_create` allocates one opaque Rust-owned session containing a
+bounded verified-module preparation cache. Capacity must be nonzero. A valid
+`out_session` is reset to null before creation; null output pointers and zero
+capacity return `TSVM_STATUS_INVALID_ARGUMENT`. Each successful session is
+owned exclusively by its caller, must be used on one serialized sequence, and
+is released exactly once with `tsvm_page_session_free`. Freeing a null session
+is valid.
+
+`tsvm_page_session_execute_utf8` accepts inline source only. It has the same
+length-delimited UTF-8 rule as the one-shot entry point. It checks the supplied
+policy on every call before the session can look up or prepare source:
+
+```c
+typedef enum tsvm_script_policy {
+  TSVM_SCRIPT_POLICY_ALLOW_TYPESCRIPT = 0,
+  TSVM_SCRIPT_POLICY_BLOCK_TYPESCRIPT = 1,
+} tsvm_script_policy;
+```
+
+An unknown policy, null session, null output pointer, or non-empty null source
+returns `TSVM_STATUS_INVALID_ARGUMENT` without a result. Invalid UTF-8,
+compile/verify/runtime failures, and a blocked policy request return an owned
+error result. A blocked request returns `TSVM_STATUS_RUNTIME_ERROR` and leaves
+the cache counters unchanged.
+
+`tsvm_page_session_cache_stats` copies observation data into caller-owned
+storage; it never exposes a borrowed cache reference:
+
+```c
+typedef struct tsvm_cache_stats {
+  size_t hits;
+  size_t misses;
+  size_t evictions;
+  size_t entries;
+} tsvm_cache_stats;
+```
+
+Identical allowed inline text produces a preparation miss first and a hit on
+later calls until FIFO eviction. The cache retains verified preparation only:
+every execution still creates a fresh TSVM runtime and heap and receives a
+fresh empty `HostEnvironment`. The session stores no source buffer, result,
+host capability, DOM, or browser network state.
 
 ## Result Envelope
 
@@ -76,13 +134,25 @@ reported as `TSVM_STATUS_INTERNAL_ERROR`; they never unwind into C++.
 provides the C++20 wrapper:
 
 ```cpp
-const auto result = tsvm::chromium::ExecuteSource("console.log(150);");
+auto created = tsvm::chromium::PageSession::Create(8);
+if (created.status != TSVM_STATUS_OK) return;
+auto session = std::move(created.session);
+
+const auto result = session.ExecuteInline(
+    "console.log(150);", TSVM_SCRIPT_POLICY_ALLOW_TYPESCRIPT);
+const auto cache = session.CacheStats();
 ```
 
-It owns no V8, Blink, DOM, IPC, filesystem, or network capability. A future
-Blink script hook must run normal script policy and origin checks before calling
-this bridge, then map TSVM output to browser-owned console and capability
-bindings. The bridge belongs in a renderer process, never a privileged browser
+`PageSession` is move-only. Its destructor releases the opaque Rust handle;
+`ExecuteInline` copies its temporary JSON before freeing the temporary Rust
+result; and `CacheStats` returns both the C status and copied counters. The
+legacy `ExecuteSource` wrapper remains available for one-shot callers.
+
+The wrapper owns no V8, Blink, DOM, IPC, filesystem, network capability, source
+buffer, result bytes, runtime heap, or host environment. A future Blink script
+hook must run normal browser script policy, CSP, origin, site-isolation, and
+resource-loading checks before it supplies concrete inline source to this
+bridge. The bridge belongs in a renderer process, never a privileged browser
 process.
 
 On Windows, use the Visual Studio Build Tools developer shell for a local syntax
@@ -103,6 +173,12 @@ system dependencies:
 kernel32.lib ntdll.lib userenv.lib ws2_32.lib dbghelp.lib
 ```
 
-For example, the local bridge smoke links `target/debug/tsvm_c_api.lib` together
-with those libraries and then executes a TypeScript `console.log(150)` program
-through the C++ wrapper.
+Run the local linked smoke with:
+
+```powershell
+cmd /d /s /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 && cargo build -p tsvm-c-api && cl /nologo /std:c++20 /EHsc /I browser\chromium /I runtime\c-api\include browser\chromium\tsvm_renderer_bridge.cc browser\chromium\renderer_bridge_smoke.cc target\debug\tsvm_c_api.lib kernel32.lib ntdll.lib userenv.lib ws2_32.lib dbghelp.lib /Fe:target\debug\tsvm_renderer_bridge_smoke.exe && target\debug\tsvm_renderer_bridge_smoke.exe'
+```
+
+It proves a real C++ wrapper observes one preparation miss, one cache hit, and
+a blocked request that leaves counters unchanged. This is a local native bridge
+proof, not a Chromium build or browser performance benchmark.
