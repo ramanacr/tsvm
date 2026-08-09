@@ -53,11 +53,7 @@ pub fn execute_source_with_host(
     source: &str,
     host: &HostEnvironment,
 ) -> Result<ExecutionOutput, ExecuteError> {
-    let compiled = compile_source(source);
-    let Some(module) = compiled.module else {
-        return Err(ExecuteError::Compile(compiled.diagnostics));
-    };
-    execute_module_with_host(&module, host)
+    PreparedModule::from_source(source)?.execute_with_host(host)
 }
 
 pub fn execute_module_graph(
@@ -93,6 +89,17 @@ impl PreparedModule {
         };
         verify_module(&module).map_err(ExecuteError::Verify)?;
         Ok(Self { module })
+    }
+
+    pub fn execute(&self) -> Result<ExecutionOutput, ExecuteError> {
+        self.execute_with_host(&HostEnvironment::new())
+    }
+
+    pub fn execute_with_host(
+        &self,
+        host: &HostEnvironment,
+    ) -> Result<ExecutionOutput, ExecuteError> {
+        Interpreter::new(&self.module, host).execute()
     }
 
     pub fn call_function(

@@ -1,6 +1,8 @@
 use tsvm_bytecode::{compile_source, decode_module, encode_module, Opcode};
 use tsvm_interop::{HostEnvironment, InteropError, InteropValue};
-use tsvm_interpreter::{execute_module, execute_module_graph, execute_source, ExecuteError, Value};
+use tsvm_interpreter::{
+    execute_module, execute_module_graph, execute_source, ExecuteError, PreparedModule, Value,
+};
 
 fn host_add(args: &[InteropValue]) -> Result<InteropValue, InteropError> {
     match args {
@@ -167,6 +169,50 @@ function add(a: number, b: number): number {
         .expect("TS function should be callable");
 
     assert_eq!(value, InteropValue::Number(42.0));
+}
+
+#[test]
+fn prepared_module_executes_verified_entry_with_host() {
+    let prepared = PreparedModule::from_source(
+        r#"
+function hostAdd(a: number, b: number): number {
+  return 0;
+}
+
+console.log(hostAdd(20, 22));
+"#,
+    )
+    .expect("source should prepare");
+    let host = HostEnvironment::new().with_function("hostAdd", host_add);
+
+    let output = prepared
+        .execute_with_host(&host)
+        .expect("prepared entry should execute");
+
+    assert_eq!(output.console, vec![Value::Number(42.0)]);
+}
+
+#[test]
+fn prepared_entry_execution_uses_fresh_runtime_state() {
+    let prepared = PreparedModule::from_source(
+        "const state = { count: 1 }; state.count += 1; console.log(state.count);",
+    )
+    .expect("source should prepare");
+
+    let first = prepared.execute().expect("first execution should succeed");
+    let second = prepared.execute().expect("second execution should succeed");
+
+    assert_eq!(first.console, vec![Value::Number(2.0)]);
+    assert_eq!(second.console, vec![Value::Number(2.0)]);
+    assert_eq!(first.heap, second.heap);
+}
+
+#[test]
+fn prepared_module_refuses_invalid_source_before_execution() {
+    let error = PreparedModule::from_source("const answer: number = \"bad\";")
+        .expect_err("invalid source should not prepare");
+
+    assert!(matches!(error, ExecuteError::Compile(_)));
 }
 
 #[test]
