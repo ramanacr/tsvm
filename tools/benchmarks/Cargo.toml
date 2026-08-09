@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 tsvm-interpreter = { path = "../../runtime/interpreter" }
 tsvm-interop = { path = "../../runtime/interop" }
+tsvm-script-loader = { path = "../../browser/script-loader" }
 tsvm-web-bindings = { path = "../../web-bindings/dom-fetch" }
 
 [lints]

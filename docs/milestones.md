@@ -303,3 +303,32 @@ Deferred from M15:
 - Real Chromium renderer page sessions over the M14 C ABI bridge.
 - Browser events, timers, promises, async fetch, and a full DOM.
 - Cross-engine comparisons or claims about outperforming browser renderers.
+
+## M16: Browser Script Preparation Cache
+
+Status: implemented for the standalone page-session model.
+
+Acceptance evidence:
+
+- `runtime/interpreter` provides a bounded `PreparedModuleCache` that accepts
+  only nonzero capacities, keys entries by exact source text, inserts only
+  successfully verified modules, exposes deterministic lookup counters, and
+  evicts FIFO without reordering entries on a hit.
+- `browser/script-loader` provides `PageScriptSession`, which owns one cache,
+  checks `ScriptPolicy` before every lookup, executes cached modules with the
+  supplied host, and preserves fresh interpreter/heap state per execution.
+- Inline sources and resolved local module graphs share the page-session cache
+  after normal policy and resource-resolution steps; no JavaScript is generated.
+- `tools/benchmarks` reports a distinct `cached-entry` workload and cumulative
+  cache hit/miss counters, with an unmeasured preparation miss followed by five
+  validated timing samples.
+- `docs/benchmark-results.md` records the M16 release-profile measurement and
+  its Windows, CPU, Rust, command, sample, raw-row, and interpretation context.
+
+Deferred from M16:
+
+- Real Chromium/Blink page ownership and `text/typescript` dispatch.
+- Browser network cache integration, URL/origin cache identity, invalidation,
+  cache partitioning, and disk-backed artifacts.
+- Browser events, timers, promises, asynchronous fetch, and a full DOM.
+- Cross-engine comparisons or claims about outperforming browser renderers.

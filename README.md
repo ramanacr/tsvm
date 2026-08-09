@@ -18,7 +18,8 @@ and browser capability boundary.
 ## Current Status
 
 This repository implements the M0-M13 standalone runtime foundation, the M14
-native bridge foundation, and the M15 browser-workload performance baseline from
+native bridge foundation, the M15 browser-workload performance baseline, and
+the M16 standalone page-session preparation cache from
 [`ts-browser-runtime-implementation.md`](ts-browser-runtime-implementation.md):
 
 - Repository scaffold for browser integration, runtime stages, web bindings,
@@ -77,6 +78,10 @@ native bridge foundation, and the M15 browser-workload performance baseline from
 - Browser-workload benchmark runner with cold source execution, warm prepared
   entry execution, warm handler dispatch, deterministic DOM/fetch host
   fixtures, five-sample median reporting, and published release results.
+- Bounded page-owned preparation cache for verified TypeScript modules, with
+  exact-source keys, FIFO eviction, policy-before-lookup enforcement, fresh
+  runtime state per hit, deterministic cache counters, and published cached
+  page-startup results.
 - Initial demo execution proof: `.ts` source reaches parser, AST, semantic
   analysis, typed IR, verified bytecode, interpreter execution, and logs `150`.
 - Interpreter fixture corpus for verified execution.
@@ -277,10 +282,28 @@ let output = page.execute()?;
 assert_eq!(output.console, vec![Value::Number(42.0)]);
 ```
 
-See [`docs/performance.md`](docs/performance.md) for cold and warm lifecycle
-definitions, and [`docs/benchmark-results.md`](docs/benchmark-results.md) for
-the checked-in M15 baseline. These are standalone TSVM measurements, not a
-real-Chromium or cross-engine performance claim.
+For a page-owned cache that retains verified preparation while checking the
+current policy and using a fresh host/runtime for each run:
+
+```rust
+use tsvm_interop::HostEnvironment;
+use tsvm_script_loader::{PageScriptSession, ScriptPolicy};
+
+let mut page = PageScriptSession::new(8)?;
+let output = page.execute_inline_typescript(
+    "console.log(40 + 2);",
+    &HostEnvironment::new(),
+    ScriptPolicy::default(),
+)?;
+assert_eq!(output.console, vec![Value::Number(42.0)]);
+assert_eq!(page.cache_stats().misses, 1);
+```
+
+See [`docs/performance.md`](docs/performance.md) for cold, warm, and cached
+page-session lifecycle definitions, and
+[`docs/benchmark-results.md`](docs/benchmark-results.md) for the checked-in
+M15 and M16 results. These are standalone TSVM measurements, not a real
+Chromium or cross-engine performance claim.
 
 ## Heap API
 

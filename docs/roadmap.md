@@ -23,6 +23,7 @@ embedded in a browser.
 | M13 performance and JIT research | Baseline done | Interpreter benchmark runner, checked-in benchmark results, performance docs, and JIT constraints are implemented. | Real profiling, trend storage, optimizer passes, and JIT prototypes remain deferred until the browser boundary matures. |
 | M14 Chromium bridge foundation | Done | Stable Rust C ABI, opaque result ownership, panic containment, deterministic tagged output, C++20 renderer adapter, and C++ syntax CI coverage are implemented. | A Chromium checkout must link the static library and add the real Blink `text/typescript` dispatch hook after script policy checks. |
 | M15 browser-workload performance | Done | Prepared verified entry execution, browser-style cold/warm benchmark modes, deterministic DOM/fetch fixtures, median result reporting, and a checked-in release baseline are implemented. | Profiling-led interpreter optimization, real Chromium page sessions, events, timers, async fetch, and fair cross-engine comparisons remain deferred. |
+| M16 browser script preparation cache | Done | Bounded FIFO verified-module cache, page-owned script sessions, policy-before-lookup enforcement, exact-source cache counters, cached-page benchmark mode, and a checked-in release result are implemented. | Real Chromium page ownership, browser cache invalidation/partitioning, events, timers, promises, async fetch, and fair cross-engine comparisons remain deferred. |
 
 ## Current Summary
 
@@ -46,12 +47,18 @@ browser-native CSP/origin enforcement, broader language coverage, production
 fuzzing/sanitizers, and longer-term performance research. M14 establishes the
 native Rust/C++ call boundary required for that work without claiming a browser
 embed exists yet. M15 establishes a standalone browser-workload measurement
-baseline without claiming a Chromium or cross-engine result.
+baseline without claiming a Chromium or cross-engine result. M16 builds on it
+with a bounded page-session preparation cache that retains verified modules
+only; every cached execution still receives a fresh TSVM runtime and its
+caller's host.
 
 ## Near-Term Priorities
 
 - Obtain a Chromium checkout and use the M14 bridge from a Blink
   `text/typescript` dispatch hook after normal script policy checks.
+- Design browser-owned cache invalidation, origin partitioning, and resource
+  identity rules before extending M16's exact-source standalone cache into a
+  Chromium renderer.
 - Replace host-function TypeScript stubs with ambient declarations for DOM,
   fetch, and interop APIs.
 - Expand language support toward exceptions, classes, loops, async, and richer

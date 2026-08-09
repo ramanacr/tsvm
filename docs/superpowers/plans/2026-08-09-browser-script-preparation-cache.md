@@ -376,7 +376,7 @@
   Run these gates from the implementation worktree:
 
   ```powershell
-  $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul && "C:\Users\Raman\.cargo\bin\cargo.exe" fmt --all -- --check --config newline_style=Windows && "C:\Users\Raman\.cargo\bin\cargo.exe" clippy --workspace --all-targets -- -D warnings && "C:\Users\Raman\.cargo\bin\cargo.exe" test --workspace && "C:\Users\Raman\.cargo\bin\cargo.exe" run -p tsvm-corpus-runner && "C:\Users\Raman\.cargo\bin\cargo.exe" test -p tsvm-security-hardening'
+  $cmd = 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 -host_arch=x64 >nul && "C:\Users\Raman\.cargo\bin\cargo.exe" fmt --all -- --check --config newline_style=Windows && "C:\Users\Raman\.cargo\bin\cargo.exe" clippy --workspace --all-targets -- -D warnings && "C:\Users\Raman\.cargo\bin\cargo.exe" test --workspace && "C:\Users\Raman\.cargo\bin\cargo.exe" run -p tsvm-lexer --bin lexer_corpus_runner -- tests/fixtures/lexer && "C:\Users\Raman\.cargo\bin\cargo.exe" test -p tsvm-security-hardening'
   & cmd.exe /d /s /c $cmd
   ```
 

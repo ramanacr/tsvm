@@ -63,3 +63,44 @@ checks its return value rather than logging, so `console_values` is zero.
 The M15 rows demonstrate the cost separation inside TSVM's standalone runtime.
 They do not measure real Chromium integration or establish cross-engine
 performance claims.
+
+## M16 Page-Session Preparation Cache
+
+Run date: 2026-08-09
+
+Command:
+
+```sh
+cargo +stable-x86_64-pc-windows-gnu run --release -p tsvm-benchmarks -- 1000
+```
+
+Environment:
+
+- Operating system: Microsoft Windows 11 Pro 10.0.26200.
+- Processor: AMD Ryzen 7 7840HS w/ Radeon 780M Graphics.
+- Rust: `rustc 1.97.1 (8bab26f4f 2026-07-14)`.
+- Cargo profile: `release`.
+- Samples: one unmeasured warm-up plus five timed samples per scenario; median
+  elapsed time is reported below.
+
+```csv
+name,mode,iterations,median_elapsed_micros,console_values,cache_hits,cache_misses
+page-startup,cold,1000,34671,1000,0,0
+cached-page-startup,cached-entry,1000,2279,1000,5000,1
+prepared-page-entry,warm-entry,1000,1897,1000,0,0
+prepared-handler-dispatch,warm-handler,1000,540,0,0,0
+dom-binding-update,warm-entry,1000,1922,1000,0,0
+same-origin-fetch-update,warm-entry,1000,2609,1000,0,0
+```
+
+`cached-page-startup` creates one page-owned cache session. Its unmeasured
+warm-up compiles and verifies the source, producing the single reported miss.
+The five timed samples perform 5,000 cache hits and execute the retained
+verified module with fresh TSVM runtime state on every call. The cold row keeps
+preparation inside every iteration, so the two rows distinguish standalone
+source preparation from cached page-script execution on the same machine.
+
+These measurements do not include a Chromium renderer, Blink dispatch, browser
+network cache, production cache invalidation/partitioning, or another engine.
+They are not a cross-engine ranking or a claim that TSVM outperforms a browser
+renderer.

@@ -9,6 +9,7 @@ use tsvm_interop::InteropValue;
 use tsvm_interpreter::{
     execute_source, execute_source_with_host, ExecuteError, ExecutionOutput, PreparedModule, Value,
 };
+use tsvm_script_loader::{PageScriptSession, ScriptLoaderError, ScriptPolicy};
 use tsvm_web_bindings::{BrowserBindings, Document, FetchService};
 
 pub const MEASURED_SAMPLES: usize = 5;
@@ -16,6 +17,7 @@ pub const MEASURED_SAMPLES: usize = 5;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BenchmarkMode {
     Cold,
+    CachedEntry,
     WarmEntry,
     WarmHandler,
 }
@@ -24,6 +26,7 @@ impl BenchmarkMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Cold => "cold",
+            Self::CachedEntry => "cached-entry",
             Self::WarmEntry => "warm-entry",
             Self::WarmHandler => "warm-handler",
         }
@@ -37,17 +40,21 @@ pub struct BenchmarkResult {
     pub iterations: usize,
     pub median_elapsed: Duration,
     pub console_values: usize,
+    pub cache_hits: usize,
+    pub cache_misses: usize,
 }
 
 impl BenchmarkResult {
     pub fn csv_row(&self) -> String {
         format!(
-            "{},{},{},{},{}",
+            "{},{},{},{},{},{},{}",
             self.name,
             self.mode.as_str(),
             self.iterations,
             self.median_elapsed.as_micros(),
-            self.console_values
+            self.console_values,
+            self.cache_hits,
+            self.cache_misses
         )
     }
 }
@@ -56,6 +63,7 @@ impl BenchmarkResult {
 pub enum BenchmarkError {
     InvalidIterations,
     Execute(ExecuteError),
+    ScriptLoader(ScriptLoaderError),
     Expectation {
         scenario: &'static str,
         expected: String,
@@ -69,8 +77,14 @@ impl From<ExecuteError> for BenchmarkError {
     }
 }
 
+impl From<ScriptLoaderError> for BenchmarkError {
+    fn from(error: ScriptLoaderError) -> Self {
+        Self::ScriptLoader(error)
+    }
+}
+
 pub fn csv_header() -> &'static str {
-    "name,mode,iterations,median_elapsed_micros,console_values"
+    "name,mode,iterations,median_elapsed_micros,console_values,cache_hits,cache_misses"
 }
 
 pub fn run_default_benchmarks(iterations: usize) -> Result<Vec<BenchmarkResult>, BenchmarkError> {
@@ -89,13 +103,19 @@ fn run_benchmark(
     iterations: usize,
 ) -> Result<BenchmarkResult, BenchmarkError> {
     let prepared = match scenario.mode {
-        BenchmarkMode::Cold => None,
+        BenchmarkMode::Cold | BenchmarkMode::CachedEntry => None,
         BenchmarkMode::WarmEntry | BenchmarkMode::WarmHandler => {
             Some(PreparedModule::from_source(scenario.source)?)
         }
     };
+    let mut session = match scenario.mode {
+        BenchmarkMode::CachedEntry => {
+            Some(PageScriptSession::new(1).expect("cached benchmark capacity is nonzero"))
+        }
+        BenchmarkMode::Cold | BenchmarkMode::WarmEntry | BenchmarkMode::WarmHandler => None,
+    };
 
-    run_iteration(scenario, prepared.as_ref())?;
+    run_iteration(scenario, prepared.as_ref(), session.as_mut())?;
 
     let mut samples = Vec::with_capacity(MEASURED_SAMPLES);
     let mut console_values = None;
@@ -103,7 +123,7 @@ fn run_benchmark(
         let started = Instant::now();
         let mut sample_console_values = 0;
         for _ in 0..iterations {
-            sample_console_values += run_iteration(scenario, prepared.as_ref())?;
+            sample_console_values += run_iteration(scenario, prepared.as_ref(), session.as_mut())?;
         }
         samples.push(started.elapsed());
 
@@ -120,18 +140,26 @@ fn run_benchmark(
         }
     }
 
+    let cache_stats = session
+        .as_ref()
+        .map(PageScriptSession::cache_stats)
+        .unwrap_or_default();
+
     Ok(BenchmarkResult {
         name: scenario.name.into(),
         mode: scenario.mode,
         iterations,
         median_elapsed: median_duration(samples),
         console_values: console_values.expect("benchmark sample count is nonzero"),
+        cache_hits: cache_stats.hits,
+        cache_misses: cache_stats.misses,
     })
 }
 
 fn run_iteration(
     scenario: &BenchmarkScenario,
     prepared: Option<&PreparedModule>,
+    session: Option<&mut PageScriptSession>,
 ) -> Result<usize, BenchmarkError> {
     match scenario.mode {
         BenchmarkMode::WarmHandler => {
@@ -150,7 +178,7 @@ fn run_iteration(
             }
             Ok(0)
         }
-        BenchmarkMode::Cold | BenchmarkMode::WarmEntry => {
+        BenchmarkMode::Cold | BenchmarkMode::CachedEntry | BenchmarkMode::WarmEntry => {
             let bindings = match scenario.host {
                 HostFixture::Empty => None,
                 HostFixture::Browser => Some(browser_bindings()),
@@ -164,6 +192,9 @@ fn run_iteration(
                     execute_source(scenario.source)?
                 }
                 (BenchmarkMode::Cold, _) => execute_source_with_host(scenario.source, &host)?,
+                (BenchmarkMode::CachedEntry, _) => session
+                    .expect("cached entry must have a page session")
+                    .execute_inline_typescript(scenario.source, &host, ScriptPolicy::default())?,
                 (BenchmarkMode::WarmEntry, Some(prepared)) => prepared.execute_with_host(&host)?,
                 (BenchmarkMode::WarmEntry, None) => unreachable!("warm entry must be prepared"),
                 (BenchmarkMode::WarmHandler, _) => unreachable!("handler branch returns above"),
@@ -231,6 +262,16 @@ fn scenarios() -> Vec<BenchmarkScenario> {
         BenchmarkScenario {
             name: "page-startup",
             mode: BenchmarkMode::Cold,
+            host: HostFixture::Empty,
+            expectation: ScenarioExpectation {
+                console: Some(Value::Number(150.0)),
+                document_text: None,
+            },
+            source: PAGE_ENTRY_SOURCE,
+        },
+        BenchmarkScenario {
+            name: "cached-page-startup",
+            mode: BenchmarkMode::CachedEntry,
             host: HostFixture::Empty,
             expectation: ScenarioExpectation {
                 console: Some(Value::Number(150.0)),
@@ -394,12 +435,14 @@ mod tests {
             iterations: 1,
             median_elapsed: Duration::from_micros(42),
             console_values: 1,
+            cache_hits: 5,
+            cache_misses: 1,
         };
 
         assert_eq!(
             csv_header(),
-            "name,mode,iterations,median_elapsed_micros,console_values"
+            "name,mode,iterations,median_elapsed_micros,console_values,cache_hits,cache_misses"
         );
-        assert_eq!(result.csv_row(), "page-startup,cold,1,42,1");
+        assert_eq!(result.csv_row(), "page-startup,cold,1,42,1,5,1");
     }
 }
