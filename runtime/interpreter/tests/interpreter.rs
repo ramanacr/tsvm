@@ -1,7 +1,8 @@
 use tsvm_bytecode::{compile_source, decode_module, encode_module, Opcode};
 use tsvm_interop::{HostEnvironment, InteropError, InteropValue};
 use tsvm_interpreter::{
-    execute_module, execute_module_graph, execute_source, ExecuteError, PreparedModule, Value,
+    execute_module, execute_module_graph, execute_source, CacheLookupStatus, ExecuteError,
+    PreparedModule, PreparedModuleCache, PreparedModuleCacheError, Value,
 };
 
 fn host_add(args: &[InteropValue]) -> Result<InteropValue, InteropError> {
@@ -213,6 +214,83 @@ fn prepared_module_refuses_invalid_source_before_execution() {
         .expect_err("invalid source should not prepare");
 
     assert!(matches!(error, ExecuteError::Compile(_)));
+}
+
+#[test]
+fn prepared_module_cache_reports_miss_then_hit_and_executes_cached_module() {
+    let mut cache = PreparedModuleCache::new(2).expect("capacity should be valid");
+    let first = cache
+        .get_or_prepare("console.log(40 + 2);")
+        .expect("first source should prepare");
+
+    assert_eq!(first.status(), CacheLookupStatus::Miss);
+    assert_eq!(
+        first.module().execute().unwrap().console,
+        vec![Value::Number(42.0)]
+    );
+
+    let second = cache
+        .get_or_prepare("console.log(40 + 2);")
+        .expect("cached source should execute");
+
+    assert_eq!(second.status(), CacheLookupStatus::Hit);
+    assert_eq!(cache.stats().hits, 1);
+    assert_eq!(cache.stats().misses, 1);
+    assert_eq!(cache.stats().evictions, 0);
+    assert_eq!(cache.stats().entries, 1);
+}
+
+#[test]
+fn prepared_module_cache_rejects_zero_capacity() {
+    assert!(matches!(
+        PreparedModuleCache::new(0),
+        Err(PreparedModuleCacheError::ZeroCapacity)
+    ));
+}
+
+#[test]
+fn prepared_module_cache_evicts_oldest_inserted_source_without_reordering_hits() {
+    let mut cache = PreparedModuleCache::new(2).expect("capacity should be valid");
+    cache
+        .get_or_prepare("console.log(1);")
+        .expect("first source should prepare");
+    cache
+        .get_or_prepare("console.log(2);")
+        .expect("second source should prepare");
+    assert_eq!(
+        cache
+            .get_or_prepare("console.log(1);")
+            .expect("first source should hit")
+            .status(),
+        CacheLookupStatus::Hit
+    );
+    cache
+        .get_or_prepare("console.log(3);")
+        .expect("third source should prepare");
+
+    assert_eq!(
+        cache
+            .get_or_prepare("console.log(1);")
+            .expect("evicted source should prepare again")
+            .status(),
+        CacheLookupStatus::Miss
+    );
+    assert_eq!(cache.stats().evictions, 2);
+}
+
+#[test]
+fn prepared_module_cache_does_not_insert_invalid_source() {
+    let mut cache = PreparedModuleCache::new(1).expect("capacity should be valid");
+
+    for _ in 0..2 {
+        assert!(matches!(
+            cache.get_or_prepare("const answer: number = \"bad\";"),
+            Err(ExecuteError::Compile(_))
+        ));
+    }
+
+    assert_eq!(cache.stats().misses, 2);
+    assert_eq!(cache.stats().entries, 0);
 }
 
 #[test]

@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 use tsvm_bytecode::{
     compile_source, verify_module, BytecodeBlock, BytecodeFunction, BytecodeModule, Constant,
@@ -119,6 +119,115 @@ impl PreparedModule {
         interpreter.heap.collect(roots);
         let value = materialize(&result, &interpreter.heap)?;
         Ok(interop_from_value(value))
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum CacheLookupStatus {
+    Hit,
+    Miss,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub struct PreparedModuleCacheStats {
+    pub hits: usize,
+    pub misses: usize,
+    pub evictions: usize,
+    pub entries: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PreparedModuleCacheError {
+    ZeroCapacity,
+}
+
+pub struct CacheLookup<'cache> {
+    status: CacheLookupStatus,
+    module: &'cache PreparedModule,
+}
+
+impl CacheLookup<'_> {
+    pub fn status(&self) -> CacheLookupStatus {
+        self.status
+    }
+
+    pub fn module(&self) -> &PreparedModule {
+        self.module
+    }
+}
+
+pub struct PreparedModuleCache {
+    capacity: usize,
+    modules: BTreeMap<String, PreparedModule>,
+    insertion_order: VecDeque<String>,
+    hits: usize,
+    misses: usize,
+    evictions: usize,
+}
+
+impl PreparedModuleCache {
+    pub fn new(capacity: usize) -> Result<Self, PreparedModuleCacheError> {
+        if capacity == 0 {
+            return Err(PreparedModuleCacheError::ZeroCapacity);
+        }
+
+        Ok(Self {
+            capacity,
+            modules: BTreeMap::new(),
+            insertion_order: VecDeque::new(),
+            hits: 0,
+            misses: 0,
+            evictions: 0,
+        })
+    }
+
+    pub fn get_or_prepare(&mut self, source: &str) -> Result<CacheLookup<'_>, ExecuteError> {
+        if self.modules.contains_key(source) {
+            self.hits += 1;
+            let module = self
+                .modules
+                .get(source)
+                .expect("cached source must have a prepared module");
+            return Ok(CacheLookup {
+                status: CacheLookupStatus::Hit,
+                module,
+            });
+        }
+
+        self.misses += 1;
+        let module = PreparedModule::from_source(source)?;
+
+        if self.modules.len() == self.capacity {
+            let evicted_source = self
+                .insertion_order
+                .pop_front()
+                .expect("full cache must have an oldest source");
+            let removed = self.modules.remove(&evicted_source);
+            debug_assert!(removed.is_some(), "cache order and entries must agree");
+            self.evictions += 1;
+        }
+
+        let source = source.to_owned();
+        self.insertion_order.push_back(source.clone());
+        self.modules.insert(source.clone(), module);
+        let module = self
+            .modules
+            .get(&source)
+            .expect("inserted source must have a prepared module");
+
+        Ok(CacheLookup {
+            status: CacheLookupStatus::Miss,
+            module,
+        })
+    }
+
+    pub fn stats(&self) -> PreparedModuleCacheStats {
+        PreparedModuleCacheStats {
+            hits: self.hits,
+            misses: self.misses,
+            evictions: self.evictions,
+            entries: self.modules.len(),
+        }
     }
 }
 
