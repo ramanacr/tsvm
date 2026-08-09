@@ -9,6 +9,8 @@ rust-version.workspace = true
 
 [dependencies]
 tsvm-interpreter = { path = "../interpreter" }
+tsvm-interop = { path = "../interop" }
+tsvm-script-loader = { path = "../../browser/script-loader" }
 
 [lib]
 name = "tsvm_c_api"
