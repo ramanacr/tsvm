@@ -9,6 +9,7 @@ rust-version.workspace = true
 [dependencies]
 tsvm-interpreter = { path = "../../runtime/interpreter" }
 tsvm-interop = { path = "../../runtime/interop" }
+tsvm-modules = { path = "../../runtime/modules" }
 
 [lints]
 workspace = true

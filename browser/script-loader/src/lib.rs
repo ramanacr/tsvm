@@ -4,8 +4,10 @@ use std::collections::BTreeMap;
 
 use tsvm_interop::HostEnvironment;
 use tsvm_interpreter::{
-    execute_module_graph, execute_source_with_host, ExecuteError, ExecutionOutput, Value,
+    ExecuteError, ExecutionOutput, PreparedModuleCache, PreparedModuleCacheError,
+    PreparedModuleCacheStats, Value,
 };
+use tsvm_modules::bundle_module_graph;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BrowserExecution {
@@ -75,56 +77,131 @@ pub fn execute_typescript_scripts_with_policy(
     host: &HostEnvironment,
     policy: ScriptPolicy,
 ) -> Result<BrowserExecution, ScriptLoaderError> {
-    let mut output = BrowserExecution {
-        console: Vec::new(),
-        scripts: Vec::new(),
-        generated_javascript: false,
-    };
+    let mut session = PageScriptSession::new(1).expect("one-shot session capacity is nonzero");
+    session.execute_typescript_scripts_with_policy(document_url, html, resources, host, policy)
+}
 
-    for script in find_scripts(html) {
-        if script_type(script.open_tag).as_deref() != Some("text/typescript") {
-            continue;
-        }
-        if !policy.allow_typescript {
-            return Err(ScriptLoaderError {
-                message: "TypeScript execution blocked by script policy".into(),
-                source: None,
-            });
-        }
+pub struct PageScriptSession {
+    cache: PreparedModuleCache,
+}
 
-        if let Some(src) = script_src(script.open_tag) {
-            let specifier = resolve_url(document_url, &src);
-            if !resources.contains_key(&specifier) {
-                return Err(ScriptLoaderError {
-                    message: format!("TypeScript script resource `{specifier}` was not provided"),
-                    source: None,
-                });
-            }
-            let execution =
-                execute_module_graph(&specifier, resources).map_err(|err| ScriptLoaderError {
-                    message: format!("failed to execute TypeScript script `{specifier}`"),
-                    source: Some(err),
-                })?;
-            append_execution(&mut output, execution);
-            output.scripts.push(ScriptExecution {
-                kind: ScriptKind::External,
-                specifier,
-            });
-        } else {
-            let execution =
-                execute_source_with_host(script.body, host).map_err(|err| ScriptLoaderError {
-                    message: "failed to execute inline TypeScript script".into(),
-                    source: Some(err),
-                })?;
-            append_execution(&mut output, execution);
-            output.scripts.push(ScriptExecution {
-                kind: ScriptKind::Inline,
-                specifier: "<inline>".into(),
-            });
-        }
+impl PageScriptSession {
+    pub fn new(cache_capacity: usize) -> Result<Self, PreparedModuleCacheError> {
+        Ok(Self {
+            cache: PreparedModuleCache::new(cache_capacity)?,
+        })
     }
 
-    Ok(output)
+    pub fn cache_stats(&self) -> PreparedModuleCacheStats {
+        self.cache.stats()
+    }
+
+    pub fn execute_inline_typescript(
+        &mut self,
+        source: &str,
+        host: &HostEnvironment,
+        policy: ScriptPolicy,
+    ) -> Result<ExecutionOutput, ScriptLoaderError> {
+        ensure_typescript_allowed(policy)?;
+        self.execute_cached_source(source, host, "failed to execute inline TypeScript script")
+    }
+
+    pub fn execute_typescript_scripts_with_policy(
+        &mut self,
+        document_url: &str,
+        html: &str,
+        resources: &BTreeMap<String, String>,
+        host: &HostEnvironment,
+        policy: ScriptPolicy,
+    ) -> Result<BrowserExecution, ScriptLoaderError> {
+        let mut output = BrowserExecution {
+            console: Vec::new(),
+            scripts: Vec::new(),
+            generated_javascript: false,
+        };
+
+        for script in find_scripts(html) {
+            if script_type(script.open_tag).as_deref() != Some("text/typescript") {
+                continue;
+            }
+            ensure_typescript_allowed(policy)?;
+
+            if let Some(src) = script_src(script.open_tag) {
+                let specifier = resolve_url(document_url, &src);
+                if !resources.contains_key(&specifier) {
+                    return Err(ScriptLoaderError {
+                        message: format!(
+                            "TypeScript script resource `{specifier}` was not provided"
+                        ),
+                        source: None,
+                    });
+                }
+                let graph = bundle_module_graph(&specifier, resources).map_err(|err| {
+                    ScriptLoaderError {
+                        message: format!("failed to execute TypeScript script `{specifier}`"),
+                        source: Some(ExecuteError::Module(err)),
+                    }
+                })?;
+                let execution = self.execute_cached_source(
+                    &graph.bundled_source,
+                    host,
+                    &format!("failed to execute TypeScript script `{specifier}`"),
+                )?;
+                append_execution(&mut output, execution);
+                output.scripts.push(ScriptExecution {
+                    kind: ScriptKind::External,
+                    specifier,
+                });
+            } else {
+                let execution = self.execute_cached_source(
+                    script.body,
+                    host,
+                    "failed to execute inline TypeScript script",
+                )?;
+                append_execution(&mut output, execution);
+                output.scripts.push(ScriptExecution {
+                    kind: ScriptKind::Inline,
+                    specifier: "<inline>".into(),
+                });
+            }
+        }
+
+        Ok(output)
+    }
+
+    fn execute_cached_source(
+        &mut self,
+        source: &str,
+        host: &HostEnvironment,
+        message: &str,
+    ) -> Result<ExecutionOutput, ScriptLoaderError> {
+        let lookup = self
+            .cache
+            .get_or_prepare(source)
+            .map_err(|source| execution_error(message, source))?;
+        lookup
+            .module()
+            .execute_with_host(host)
+            .map_err(|source| execution_error(message, source))
+    }
+}
+
+fn ensure_typescript_allowed(policy: ScriptPolicy) -> Result<(), ScriptLoaderError> {
+    if policy.allow_typescript {
+        return Ok(());
+    }
+
+    Err(ScriptLoaderError {
+        message: "TypeScript execution blocked by script policy".into(),
+        source: None,
+    })
+}
+
+fn execution_error(message: &str, source: ExecuteError) -> ScriptLoaderError {
+    ScriptLoaderError {
+        message: message.into(),
+        source: Some(source),
+    }
 }
 
 fn append_execution(output: &mut BrowserExecution, execution: ExecutionOutput) {
